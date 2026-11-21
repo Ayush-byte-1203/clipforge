@@ -453,8 +453,8 @@ def cleanup_all_storage():
 load_jobs()
 
 if __name__ == "__main__":
-    host = os.environ.get("CLIPFORGE_HOST", "0.0.0.0" if (os.environ.get("PORT") or os.environ.get("SPACE_ID")) else "127.0.0.1")
-    port = int(os.environ.get("CLIPFORGE_PORT", os.environ.get("PORT", "7860" if os.environ.get("SPACE_ID") else "8787")))
+    host = os.environ.get("CLIPFORGE_HOST", "0.0.0.0" if (os.environ.get("PORT") or os.environ.get("RENDER") or os.environ.get("SPACE_ID")) else "127.0.0.1")
+    port = int(os.environ.get("PORT") or os.environ.get("CLIPFORGE_PORT") or 8787)
     print(f"\n  ClipForge is running at http://{host}:{port}\n")
     for w in core.health()["warnings"]:
         print("  WARNING:", w, "\n")

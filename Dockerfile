@@ -29,8 +29,5 @@ USER appuser
 
 ENV CLIPFORGE_DATA=/data
 ENV CLIPFORGE_HOST=0.0.0.0
-ENV CLIPFORGE_PORT=7860
-
-EXPOSE 7860
 
 CMD ["python", "server.py"]
