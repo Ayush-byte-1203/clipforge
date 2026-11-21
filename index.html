@@ -215,7 +215,7 @@ async function poll(){
   if (!cur) return;
   const r = await fetch("/api/jobs/"+cur); if (!r.ok) return;
   const j = await r.json(); draw(j); loadHist();
-  if (j.status === "done" || j.status === "error") clearInterval(timer);
+  if (j.status === "done" || j.status === "error" || j.status === "cancelled") clearInterval(timer);
 }
 
 let drawnClips = "";
@@ -224,8 +224,13 @@ function draw(j){
   const idx = STAGES.findIndex(s => s[0] === j.stage);
   let h = `<h2>${esc(j.title || "Working")}</h2><div class="status">`;
   if (j.status === "error") h += `<div class="err">${esc(j.error)}</div>`;
+  else if (j.status === "cancelled") h += `<div class="err" style="color:var(--hot)">⚠️ Project stopped by user.</div>`;
   else if (j.status !== "done") {
-    h += `<div>${esc(j.message)}</div><div class="bar"><i style="width:${Math.round(j.progress*100)}%"></i></div>
+    h += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <span>${esc(j.message)}</span>
+      <button onclick="stopJob('${j.id}')" style="background:#b3261e;color:#fff;border:0;border-radius:5px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer">🛑 Stop Project</button>
+    </div>
+    <div class="bar"><i style="width:${Math.round(j.progress*100)}%"></i></div>
     <div class="stages">${STAGES.map((s,i)=> i===idx ? `<b>${s[1]}</b>` : `<span>${s[1]}</span>`).join("")}</div>`;
   } else {
     const vi = j.video || {};
@@ -234,8 +239,20 @@ function draw(j){
   if (j.notes && j.notes.length) h += `<p class="notes">${j.notes.map(esc).join(" ")}</p>`;
   if (j.saved_to) h += `<p class="saved">Saved to ${esc(j.saved_to)}</p>`;
   if (j.save_error) h += `<p class="err">Could not save to your folder or cloud: ${esc(j.save_error)}</p>`;
-  if (j.status === "error" && j.can_retry) h += `<p><button class="go" style="padding:9px 16px" onclick="retryJob('${j.id}')">Retry from where it stopped (reuses the downloaded video)</button></p>`;
-  if (j.status === "done" || j.status === "error") h += `<button class="del" onclick="delJob('${j.id}')">Delete project files (${j.size_mb||0} MB on this computer)</button>`;
+
+  // Project configuration summary
+  const opts = j.opts || {};
+  h += `<div style="display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:14px;padding-top:10px;border-top:1px solid var(--line);font-size:12px;color:var(--mute)">
+    <span>✂️ Target: <b>${opts.num_clips || 5} clips</b></span>
+    <span>⏱️ Length: <b>${opts.min_len || 20}s – ${opts.max_len || 60}s</b></span>
+    <span>📐 Layout: <b>${opts.layout === "fit" ? "Fit (webcam safe)" : "Fill (speaker zoom)"}</b></span>
+    <span>💬 Captions: <b>${opts.captions !== false ? "On" : "Off"}</b></span>
+    <span>🎯 Title: <b>${opts.hook !== false ? "On" : "Off"}</b></span>
+    <span>☁️ Drive: <b>${j.drive_uploaded ? "Saved ✅" : (opts.save_to ? esc(opts.save_to) : "Auto-sync")}</b></span>
+  </div>`;
+
+  if (j.status === "error" && j.can_retry) h += `<p><button class="go" style="padding:9px 16px" onclick="retryJob('${j.id}')">Retry from where it stopped</button></p>`;
+  if (j.status === "done" || j.status === "error" || j.status === "cancelled") h += `<div style="margin-top:8px"><button class="del" onclick="delJob('${j.id}')">Delete project files (${j.size_mb||0} MB)</button></div>`;
   h += `</div>`;
   const key = j.status + "|" + (j.clips||[]).length;
   if (j.status === "done") {
@@ -244,6 +261,12 @@ function draw(j){
     h += j.clips.map(c => clipHTML(j, c)).join("");
   }
   v.dataset.job = j.id; v.innerHTML = h;
+}
+
+async function stopJob(id){
+  if (!confirm("Are you sure you want to stop this project?")) return;
+  await fetch("/api/jobs/"+id+"/cancel", {method:"POST"});
+  poll();
 }
 
 async function retryJob(id){

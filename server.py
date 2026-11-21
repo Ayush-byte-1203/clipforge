@@ -39,6 +39,7 @@ JOBS: dict[str, dict] = {}
 JOB_LOCK = threading.Lock()
 WORKER = threading.Semaphore(1)  # one heavy job at a time
 RENDER_LOCKS: dict[str, threading.Lock] = {}
+CANCEL_EVENTS: dict[str, threading.Event] = {}
 
 
 def jdir(jid: str) -> Path:
@@ -65,15 +66,27 @@ def load_jobs():
 
 def worker(jid: str, url: str, source: Path | None, opts: dict):
     job = JOBS[jid]
+    ev = CANCEL_EVENTS.get(jid)
 
     def report(msg, frac=None, stage=None):
+        if ev and ev.is_set():
+            raise RuntimeError("Project stopped by user.")
         job["message"] = msg
         if stage:
             job["stage"] = stage
         if frac is not None:
             job["progress"] = round(max(job["progress"], min(frac, 0.99)), 3)
 
+    if ev and ev.is_set():
+        job.update(status="cancelled", message="Stopped by user", error="Stopped by user")
+        save(job)
+        return
+
     with WORKER:
+        if ev and ev.is_set():
+            job.update(status="cancelled", message="Stopped by user", error="Stopped by user")
+            save(job)
+            return
         job["status"] = "running"
         try:
             res = core.run_pipeline(jdir(jid), opts, report, source=source, url=url, title=job.get("title", ""))
@@ -120,6 +133,9 @@ def worker(jid: str, url: str, source: Path | None, opts: dict):
                     f.unlink(missing_ok=True)
             job.update(status="done", progress=1.0, stage="done", message="Done")
         except Exception as e:
+            if (ev and ev.is_set()) or "stopped by user" in str(e).lower():
+                job.update(status="cancelled", error="Project stopped by user", message="Stopped by user")
+                return
             msg = re.sub(r"\x1b\[[0-9;]*m", "", str(e))[-900:]
             low = msg.lower()
             if "not a bot" in low or "confirm you" in low:
@@ -278,8 +294,22 @@ def create_job(
            "opts": {k: v for k, v in opts.items() if k != "hf_token"}}
     JOBS[jid] = job
     save(job)
+    CANCEL_EVENTS[jid] = threading.Event()
     threading.Thread(target=worker, args=(jid, url if core.is_url(url) else "", source, opts), daemon=True).start()
     return {"id": jid}
+
+
+@app.post("/api/jobs/{jid}/cancel")
+def cancel_job(jid: str):
+    job = JOBS.get(jid)
+    if not job:
+        raise HTTPException(404, "Unknown job")
+    ev = CANCEL_EVENTS.get(jid)
+    if ev:
+        ev.set()
+    job.update(status="cancelled", message="Stopped by user", error="Stopped by user")
+    save(job)
+    return {"ok": True}
 
 
 @app.post("/api/jobs/{jid}/retry")
