@@ -141,7 +141,9 @@ def download(url: str, out_dir: Path, live_minutes: int, report, max_height: int
             good = o
             break
         except (ValueError, yt_dlp.utils.DownloadError, Exception) as e:
-            if "unsupported platform" in str(e).lower() and "cookiesfrombrowser" in o:
+            err_str = str(e).lower()
+            if ("unsupported platform" in err_str or "operation not permitted" in err_str or "permission" in err_str) and "cookiesfrombrowser" in o:
+                print(f"[clipforge] Browser cookies access failed ({e}), continuing without cookies...")
                 o.pop("cookiesfrombrowser", None)
                 base.pop("cookiesfrombrowser", None)
                 try:
@@ -185,8 +187,16 @@ def download(url: str, out_dir: Path, live_minutes: int, report, max_height: int
                 report(f"Downloading video... {d.get('downloaded_bytes', 0) * 100 // tot}%", d["downloaded_bytes"] / tot)
 
     opts = {**good, "outtmpl": str(out_dir / "source.%(ext)s"), "merge_output_format": "mp4", "progress_hooks": [hook]}
-    with yt_dlp.YoutubeDL(opts) as y:
-        y.download([url])
+    try:
+        with yt_dlp.YoutubeDL(opts) as y:
+            y.download([url])
+    except Exception as e:
+        if ("operation not permitted" in str(e).lower() or "permission" in str(e).lower()) and "cookiesfrombrowser" in opts:
+            opts.pop("cookiesfrombrowser", None)
+            with yt_dlp.YoutubeDL(opts) as y:
+                y.download([url])
+        else:
+            raise
     files = sorted(out_dir.glob("source.*"), key=lambda p: p.stat().st_size, reverse=True)
     files = [f for f in files if f.suffix.lower() in (".mp4", ".mkv", ".webm", ".mov")]
     if not files:
