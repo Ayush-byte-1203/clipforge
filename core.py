@@ -94,7 +94,7 @@ JS_RUNTIMES = {  # name -> extra places to look besides PATH
     "quickjs": ["/opt/homebrew/bin/qjs", "/usr/local/bin/qjs"],
 }
 # YouTube "player clients" to try, in order, when the default one hands back no downloadable formats
-CLIENT_ATTEMPTS = [None, ["tv"], ["web_safari"], ["mweb"], ["android_vr"]]
+CLIENT_ATTEMPTS = [None, ["android"], ["tv"], ["mweb", "android"], ["web_safari"], ["android_vr"]]
 
 
 def find_js_runtimes() -> dict:
@@ -129,7 +129,7 @@ def download(url: str, out_dir: Path, live_minutes: int, report, max_height: int
     if not shutil.which("ffmpeg"):
         base["ffmpeg_location"] = ffmpeg_bin()
 
-    vfmt = f"bv*[height<={max_height}]+ba/b[height<={max_height}]/bv*+ba/b"
+    vfmt = f"bv*[height<={max_height}]+ba/b[height<={max_height}]/bv*+ba/b/best[height<={max_height}]/best"
     info, good, last = None, None, None
     for clients in CLIENT_ATTEMPTS:
         o = {**base, "format": vfmt}
@@ -153,8 +153,8 @@ def download(url: str, out_dir: Path, live_minutes: int, report, max_height: int
                     last = e2
                     continue
             last = e
-            if re.search(r"format is not available|only images|no video formats", str(e), re.I):
-                report("YouTube gave no formats, trying another way...")
+            if re.search(r"format is not available|only images|no video formats|sign in|confirm you|bot|forbidden", str(e), re.I):
+                report("YouTube restricted format, trying alternate player client...")
                 continue
             raise
     if info is None:
