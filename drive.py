@@ -93,41 +93,74 @@ def is_connected() -> bool:
 
 
 def get_auth_url(redirect_uri: str) -> str:
-    """Return a Google OAuth2 authorisation URL the user should visit.
+    """Return a Google OAuth2 authorisation URL the user should visit."""
+    import urllib.parse
 
-    ``redirect_uri`` must match one registered in the Google Cloud Console
-    (e.g. ``http://localhost:8787/api/drive/callback``).
-    """
-    from google_auth_oauthlib.flow import Flow
-
+    client_id = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
     if not is_configured():
         raise RuntimeError("GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET env vars are not set.")
 
-    flow = Flow.from_client_config(_client_config(), scopes=SCOPES, redirect_uri=redirect_uri)
-    auth_url, _ = flow.authorization_url(
-        access_type="offline",
-        prompt="consent",
-        include_granted_scopes="true",
-    )
-    return auth_url
+    params = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": " ".join(SCOPES),
+        "access_type": "offline",
+        "prompt": "consent",
+        "include_granted_scopes": "true",
+    }
+    return f"https://accounts.google.com/o/oauth2/v2/auth?{urllib.parse.urlencode(params)}"
 
 
 def handle_callback(code: str, redirect_uri: str) -> tuple[bool, str]:
-    """Exchange an authorisation *code* for tokens and persist them."""
-    from google_auth_oauthlib.flow import Flow
+    """Exchange an authorisation code for tokens and persist them."""
+    import json
+    import urllib.parse
+    import urllib.request
+    from google.oauth2.credentials import Credentials
 
+    client_id = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
+    client_secret = os.environ.get("GOOGLE_CLIENT_SECRET", "").strip()
     if not is_configured():
         return False, "GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET environment variables are missing."
-    try:
-        flow = Flow.from_client_config(_client_config(), scopes=SCOPES, redirect_uri=redirect_uri)
-        flow.fetch_token(code=code)
 
+    data = urllib.parse.urlencode({
+        "code": code,
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "redirect_uri": redirect_uri,
+        "grant_type": "authorization_code",
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        "https://oauth2.googleapis.com/token",
+        data=data,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    try:
+        with urllib.request.urlopen(req) as resp:
+            token_data = json.loads(resp.read().decode("utf-8"))
+
+        creds = Credentials(
+            token=token_data.get("access_token"),
+            refresh_token=token_data.get("refresh_token"),
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=client_id,
+            client_secret=client_secret,
+            scopes=SCOPES,
+        )
         TOKEN_PATH.parent.mkdir(parents=True, exist_ok=True)
-        TOKEN_PATH.write_text(flow.credentials.to_json(), encoding="utf-8")
+        TOKEN_PATH.write_text(creds.to_json(), encoding="utf-8")
         return True, ""
     except Exception as exc:
-        print(f"[clipforge drive callback error] {exc}")
-        return False, str(exc)
+        msg = str(exc)
+        if hasattr(exc, "read"):
+            try:
+                msg = exc.read().decode("utf-8")
+            except Exception:
+                pass
+        print(f"[clipforge drive callback error] {msg}")
+        return False, msg
 
 
 def disconnect() -> bool:
