@@ -121,7 +121,11 @@ def download(url: str, out_dir: Path, live_minutes: int, report, max_height: int
     if cookies_file:
         base["cookiefile"] = cookies_file
     elif cookies_browser:
-        base["cookiesfrombrowser"] = (cookies_browser,)
+        import sys
+        if sys.platform in ("darwin", "win32"):
+            base["cookiesfrombrowser"] = (cookies_browser,)
+        else:
+            print(f"[clipforge] Ignoring '{cookies_browser}' browser cookies on {sys.platform} (browser cookies require a local desktop)")
     if not shutil.which("ffmpeg"):
         base["ffmpeg_location"] = ffmpeg_bin()
 
@@ -136,7 +140,18 @@ def download(url: str, out_dir: Path, live_minutes: int, report, max_height: int
                 info = y.extract_info(url, download=False)  # also selects the format, so "no formats" fails here
             good = o
             break
-        except yt_dlp.utils.DownloadError as e:
+        except (ValueError, yt_dlp.utils.DownloadError, Exception) as e:
+            if "unsupported platform" in str(e).lower() and "cookiesfrombrowser" in o:
+                o.pop("cookiesfrombrowser", None)
+                base.pop("cookiesfrombrowser", None)
+                try:
+                    with yt_dlp.YoutubeDL(o) as y:
+                        info = y.extract_info(url, download=False)
+                    good = o
+                    break
+                except Exception as e2:
+                    last = e2
+                    continue
             last = e
             if re.search(r"format is not available|only images|no video formats", str(e), re.I):
                 report("YouTube gave no formats, trying another way...")
