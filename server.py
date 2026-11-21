@@ -349,6 +349,14 @@ def delete_job(jid: str):
 
 
 # ----------------------------------------------------------------------------- Google Drive & Storage
+def _callback_uri(request: Request) -> str:
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+    host = request.headers.get("x-forwarded-host") or request.url.netloc
+    if "onrender.com" in str(host) or proto == "https":
+        return f"https://{host}/api/drive/callback"
+    return f"{str(request.base_url).rstrip('/')}/api/drive/callback"
+
+
 @app.get("/api/drive/status")
 def drive_status():
     import drive
@@ -358,8 +366,8 @@ def drive_status():
 @app.get("/api/drive/auth")
 def drive_auth(request: Request):
     import drive
-    base = str(request.base_url).rstrip("/")
-    url = drive.get_auth_url(f"{base}/api/drive/callback")
+    cb = _callback_uri(request)
+    url = drive.get_auth_url(cb)
     if not url:
         raise HTTPException(400, "Google Drive credentials not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.")
     return {"url": url}
@@ -368,10 +376,10 @@ def drive_auth(request: Request):
 @app.get("/api/drive/callback")
 def drive_callback(code: str, request: Request):
     import drive
-    base = str(request.base_url).rstrip("/")
-    ok = drive.handle_callback(code, f"{base}/api/drive/callback")
+    cb = _callback_uri(request)
+    ok, err_msg = drive.handle_callback(code, cb)
     if not ok:
-        return HTMLResponse("<body style='font-family:sans-serif;padding:40px;text-align:center;'><h2>❌ Could not connect Google Drive</h2><p>Please check your credentials or try again.</p></body>")
+        return HTMLResponse(f"<body style='font-family:sans-serif;padding:40px;text-align:center;'><h2>❌ Could not connect Google Drive</h2><p style='color:#c00;'>{err_msg}</p><p>Please check your credentials or try again.</p></body>")
     return HTMLResponse("<body style='font-family:sans-serif;padding:40px;text-align:center;'><h2>✅ Google Drive Connected!</h2><p>All finished clips will now be saved to your Google Drive automatically.</p><p>You can close this tab now.</p><script>setTimeout(() => window.close(), 2500);</script></body>")
 
 

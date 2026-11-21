@@ -15,6 +15,9 @@ from typing import Any
 # ── data directory (matches server.py convention) ────────────────────────────
 DATA = Path(os.environ.get("CLIPFORGE_DATA", Path(__file__).parent / "data")).resolve()
 
+# Allow HTTP transport for local/reverse-proxy OAuth flow
+os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
+
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 TOKEN_PATH = DATA / "drive_token.json"
 
@@ -109,25 +112,22 @@ def get_auth_url(redirect_uri: str) -> str:
     return auth_url
 
 
-def handle_callback(code: str, redirect_uri: str) -> bool:
-    """Exchange an authorisation *code* for tokens and persist them.
-
-    Returns ``True`` on success, ``False`` on failure.
-    """
+def handle_callback(code: str, redirect_uri: str) -> tuple[bool, str]:
+    """Exchange an authorisation *code* for tokens and persist them."""
     from google_auth_oauthlib.flow import Flow
 
     if not is_configured():
-        return False
+        return False, "GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET environment variables are missing."
     try:
         flow = Flow.from_client_config(_client_config(), scopes=SCOPES, redirect_uri=redirect_uri)
         flow.fetch_token(code=code)
 
         TOKEN_PATH.parent.mkdir(parents=True, exist_ok=True)
         TOKEN_PATH.write_text(flow.credentials.to_json(), encoding="utf-8")
-        return True
+        return True, ""
     except Exception as exc:
-        log.error("OAuth callback failed: %s", exc)
-        return False
+        print(f"[clipforge drive callback error] {exc}")
+        return False, str(exc)
 
 
 def disconnect() -> bool:
