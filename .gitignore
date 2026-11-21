@@ -1,0 +1,41 @@
+# Environment files & Secrets (NEVER commit to git)
+.env
+.env.*
+!.env.example
+credentials.json
+client_secret*.json
+*token*.json
+cookies*.txt
+
+# Working data, clips, and downloads
+data/
+*.mp4
+*.mkv
+*.webm
+*.mov
+*.wav
+*.m4a
+
+# Python & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+.pytest_cache/
+
+# OS-specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs & temp files
+*.log
+*.tmp
+*.part

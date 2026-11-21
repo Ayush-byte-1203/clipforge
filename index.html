@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ClipForge</title>
+<style>
+:root{
+  --bg:#e9ecef; --panel:#f7f8f9; --ink:#14181f; --mute:#5b6572; --line:#cfd5dc;
+  --accent:#2f4bff; --accent-ink:#fff; --hot:#e0a100; --ok:#12805c; --bad:#b3261e; --field:#fff;
+}
+@media (prefers-color-scheme: dark){
+  :root{--bg:#14171c; --panel:#1b1f26; --ink:#e8ebef; --mute:#95a0ae; --line:#2e3540; --accent:#7f93ff; --accent-ink:#0f1220; --hot:#f2b90d; --ok:#4cc9a0; --bad:#ff8a80; --field:#12151a;}
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 "Segoe UI",system-ui,-apple-system,Roboto,sans-serif}
+.app{display:grid;grid-template-columns:380px 1fr;gap:28px;max-width:1280px;margin:0 auto;padding:28px 24px 60px}
+@media (max-width:900px){.app{grid-template-columns:1fr}}
+h1{font-size:26px;margin:0 0 2px;letter-spacing:-.01em}
+.sub{color:var(--mute);margin:0 0 20px}
+aside{align-self:start;position:sticky;top:20px}
+@media (max-width:900px){aside{position:static}}
+form{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;display:grid;gap:14px}
+label{display:grid;gap:5px;font-weight:600;font-size:13.5px}
+label small{font-weight:400;color:var(--mute)}
+input[type=text],input[type=number],input[type=password],select,input[type=file]{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:6px;background:var(--field);color:var(--ink);font:inherit}
+input:focus-visible,select:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.check{display:flex;align-items:center;gap:8px;font-weight:500}
+.check input{width:17px;height:17px;accent-color:var(--accent)}
+button.go{background:var(--accent);color:var(--accent-ink);border:0;border-radius:6px;padding:12px;font:inherit;font-weight:700;cursor:pointer}
+button.go:disabled{opacity:.55;cursor:wait}
+details{border-top:1px solid var(--line);padding-top:12px}
+summary{cursor:pointer;font-weight:600;font-size:13.5px}
+details>div{display:grid;gap:12px;margin-top:12px}
+.hint{color:var(--mute);font-size:12.5px;margin:0}
+.err{color:var(--bad);font-weight:600;white-space:pre-wrap}
+main h2{font-size:18px;margin:0 0 10px}
+.status{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:22px}
+.bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden;margin:10px 0 6px}
+.bar i{display:block;height:100%;background:var(--accent);width:0;transition:width .4s}
+.stages{display:flex;gap:16px;color:var(--mute);font-size:13px;flex-wrap:wrap}
+.stages b{color:var(--ink)}
+.notes{color:var(--mute);font-size:13px;margin:8px 0 0}
+.clip{display:grid;grid-template-columns:216px 1fr;gap:20px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
+@media (max-width:600px){.clip{grid-template-columns:1fr}}
+video{width:100%;aspect-ratio:9/16;background:#000;border-radius:6px;display:block}
+.clip h3{margin:0 0 4px;font-size:17px;line-height:1.3}
+.meta{color:var(--mute);font-size:13px;margin-bottom:10px}
+.score{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.score strong{font-size:30px;line-height:1;min-width:52px;color:var(--hot)}
+.score .meter{flex:1;height:10px;background:var(--line);border-radius:5px;overflow:hidden}
+.score .meter i{display:block;height:100%;background:var(--hot)}
+.parts{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12.5px;color:var(--mute);margin-bottom:10px}
+.parts b{color:var(--ink)}
+.why{margin:0 0 10px}
+.txt{font-size:13px;color:var(--mute);max-height:4.5em;overflow:hidden;margin:0 0 12px}
+.dl{display:flex;gap:8px;flex-wrap:wrap}
+.dl select{width:auto}
+.dl button{border:1px solid var(--accent);background:transparent;color:var(--accent);border-radius:6px;padding:8px 14px;font:inherit;font-weight:700;cursor:pointer}
+.dl button:disabled{opacity:.6;cursor:wait}
+.hist{margin-top:26px}
+.hist button.h{display:flex;width:100%;justify-content:space-between;gap:10px;text-align:left;background:none;border:0;border-top:1px solid var(--line);padding:9px 2px;color:var(--ink);font:inherit;cursor:pointer}
+.hist .st{color:var(--mute);font-size:13px;white-space:nowrap}
+.del{background:none;border:0;color:var(--bad);font:inherit;font-size:13px;cursor:pointer;padding:6px 0 0;text-decoration:underline}
+.saved{color:var(--ok);font-weight:600;margin:8px 0 0}
+.warn{background:var(--panel);border:1px solid var(--hot);border-left-width:5px;border-radius:8px;padding:12px 14px;margin-bottom:18px;font-size:14px}
+.warn code{user-select:all;word-break:break-all}
+.empty{color:var(--mute);padding:30px 0}
+</style>
+</head>
+<body>
+<div class="app">
+<aside>
+  <h1>ClipForge</h1>
+  <p class="sub">Turn any long video or live stream into vertical clips most likely to take off.</p>
+  <form id="f">
+    <label>Video link
+      <input type="text" name="url" id="url" placeholder="https://youtu.be/... or a file path" autocomplete="off">
+      <small>YouTube, Twitch, Kick, Vimeo, X and most other sites. Live streams are recorded first.</small>
+    </label>
+    <label>Or upload a file
+      <input type="file" name="file" accept="video/*,audio/*">
+    </label>
+    <div class="row">
+      <label>Number of clips <input type="number" name="num_clips" value="5" min="1" max="20"></label>
+      <label>Layout
+        <select name="layout">
+          <option value="fit" selected>Fit, blurred background (keeps webcam & full frame)</option>
+          <option value="fill">Fill, follow the speaker (zooms in on face)</option>
+        </select>
+      </label>
+    </div>
+    <div class="row">
+      <label>Shortest clip (s) <input type="number" name="min_len" value="20" min="5" max="120"></label>
+      <label>Longest clip (s) <input type="number" name="max_len" value="60" min="10" max="180"></label>
+    </div>
+    <label class="check"><input type="checkbox" name="captions" value="true" checked> Burned-in captions with word highlight</label>
+    <label class="check"><input type="checkbox" name="hook" value="true" checked> Title at the start of each clip</label>
+    <details>
+      <summary>Advanced</summary>
+      <div>
+        <label>If the link is a live stream, record for (minutes)
+          <input type="number" name="live_minutes" value="10" min="1" max="360">
+        </label>
+        <label>Speech recognition model
+          <select name="whisper_model">
+            <option value="tiny">tiny, fastest</option>
+            <option value="base" selected>base, good balance</option>
+            <option value="small">small, more accurate</option>
+            <option value="medium">medium, slow on CPU</option>
+            <option value="large-v3">large-v3, best, needs a GPU</option>
+          </select>
+        </label>
+        <label>Spoken language <small>Leave empty to detect it</small>
+          <input type="text" name="language" placeholder="en, hi, es ...">
+        </label>
+        <label>Caption highlight colour
+          <select name="caption_color">
+            <option value="gold">Gold</option><option value="green">Green</option><option value="pink">Pink</option>
+            <option value="cyan">Cyan</option><option value="white">White</option>
+          </select>
+        </label>
+        <label class="check"><input type="checkbox" name="uppercase" value="true" checked> Capital letters in captions</label>
+        <label>YouTube sign-in <small>Choose this if YouTube says "confirm you're not a bot". Uses the browser where you are logged in.</small>
+          <select name="cookies_browser"><option value="">Not needed</option><option value="chrome">Chrome</option>
+            <option value="firefox">Firefox</option><option value="safari">Safari</option><option value="edge">Edge</option><option value="brave">Brave</option></select>
+        </label>
+        <label>Or a cookies.txt file path <small>Optional</small>
+          <input type="text" name="cookies_file" placeholder="/Users/you/cookies.txt">
+        </label>
+        <label>Hugging Face token <small>Optional. Adds AI rating of each moment.</small>
+          <input type="password" name="hf_token" autocomplete="off" placeholder="hf_...">
+        </label>
+        <label>AI model <small>Optional. Leave empty to try the defaults.</small>
+          <input type="text" name="llm_model" placeholder="Qwen/Qwen2.5-72B-Instruct">
+        </label>
+      </div>
+    </details>
+    <details>
+      <summary>Storage and saving</summary>
+      <div>
+        <p class="hint">Working files must sit on this computer while a video is processed. These options shrink that footprint and move the results elsewhere.</p>
+        <label>Source quality to download <small>Lower uses less temporary space</small>
+          <select name="source_height"><option value="1080">1080p</option><option value="720">720p</option><option value="480">480p</option></select>
+        </label>
+        <label>Clip qualities to export
+          <span class="check"><input type="checkbox" class="qual" value="480p"> 480p</span>
+          <span class="check"><input type="checkbox" class="qual" value="720p" checked> 720p</span>
+          <span class="check"><input type="checkbox" class="qual" value="1080p" checked> 1080p</span>
+        </label>
+        <label class="check"><input type="checkbox" name="delete_source" checked> Delete the source video when finished</label>
+        <label>Save clips to <small>A folder (Google Drive for Desktop, external disk) or an rclone remote like gdrive:ClipForge</small>
+          <input type="text" name="save_to" list="dests" placeholder="Pick a suggestion or type a folder path">
+          <datalist id="dests"></datalist>
+          <small id="destnote"></small>
+        </label>
+        <label class="check"><input type="checkbox" name="remove_local"> Remove clips from this computer after saving</label>
+      </div>
+    </details>
+    <button class="go" id="go" type="submit">Find the best clips</button>
+    <div class="err" id="ferr"></div>
+  </form>
+
+  <div id="drivePanel" style="margin-top:14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:6px;display:flex;align-items:center;gap:6px">
+      <span>☁️ Google Drive Sync</span>
+    </div>
+    <div id="driveStatus" style="font-size:13px;color:var(--mute)">Checking status...</div>
+  </div>
+
+  <div id="storagePanel" style="margin-top:14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between">
+      <span>💾 Server Storage</span>
+      <button onclick="cleanAllStorage()" id="cleanStorageBtn" style="background:none;border:1px solid var(--line);color:var(--mute);border-radius:5px;padding:3px 8px;font-size:11px;cursor:pointer">Free space</button>
+    </div>
+    <div id="storageText" style="font-size:12.5px;color:var(--mute)">Loading...</div>
+  </div>
+</aside>
+<main>
+  <div id="warn"></div>
+  <div id="view"><p class="empty">Paste a link, choose how many clips you want, and start. Clips appear here as soon as they are ready.</p></div>
+  <section class="hist" id="hist"></section>
+</main>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+let cur = null, timer = null;
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmt = s => { s = Math.round(s); const h = Math.floor(s/3600), m = Math.floor(s%3600/60), x = s%60;
+  return (h ? h+":"+String(m).padStart(2,"0") : m)+":"+String(x).padStart(2,"0"); };
+const STAGES = [["download","Download"],["transcribe","Transcribe"],["analyze","Find moments"],["render","Render"]];
+
+$("#f").addEventListener("submit", async e => {
+  e.preventDefault();
+  $("#ferr").textContent = ""; $("#go").disabled = true;
+  const fd = new FormData(e.target);
+  for (const k of ["captions","hook","uppercase","delete_source","remove_local"]) fd.set(k, e.target.elements[k].checked ? "true" : "false");
+  const qs = [...document.querySelectorAll(".qual:checked")].map(x => x.value);
+  fd.set("qualities", qs.length ? qs.join(",") : "720p");
+  if (!fd.get("file").name) fd.delete("file");
+  try {
+    const r = await fetch("/api/jobs", {method:"POST", body: fd});
+    const j = await r.json();
+    if (!r.ok) throw new Error(typeof j.detail === "string" ? j.detail : "Check the form values and try again.");
+    openJob(j.id);
+  } catch (x) { $("#ferr").textContent = x.message; }
+  $("#go").disabled = false;
+});
+
+function openJob(id){ cur = id; clearInterval(timer); poll(); timer = setInterval(poll, 1500); }
+
+async function poll(){
+  if (!cur) return;
+  const r = await fetch("/api/jobs/"+cur); if (!r.ok) return;
+  const j = await r.json(); draw(j); loadHist();
+  if (j.status === "done" || j.status === "error") clearInterval(timer);
+}
+
+let drawnClips = "";
+function draw(j){
+  const v = $("#view");
+  const idx = STAGES.findIndex(s => s[0] === j.stage);
+  let h = `<h2>${esc(j.title || "Working")}</h2><div class="status">`;
+  if (j.status === "error") h += `<div class="err">${esc(j.error)}</div>`;
+  else if (j.status !== "done") {
+    h += `<div>${esc(j.message)}</div><div class="bar"><i style="width:${Math.round(j.progress*100)}%"></i></div>
+    <div class="stages">${STAGES.map((s,i)=> i===idx ? `<b>${s[1]}</b>` : `<span>${s[1]}</span>`).join("")}</div>`;
+  } else {
+    const vi = j.video || {};
+    h += `<div>${j.clips.length} clips from a ${fmt(vi.duration||0)} video, ranked by viral potential.</div>`;
+  }
+  if (j.notes && j.notes.length) h += `<p class="notes">${j.notes.map(esc).join(" ")}</p>`;
+  if (j.saved_to) h += `<p class="saved">Saved to ${esc(j.saved_to)}</p>`;
+  if (j.save_error) h += `<p class="err">Could not save to your folder or cloud: ${esc(j.save_error)}</p>`;
+  if (j.status === "error" && j.can_retry) h += `<p><button class="go" style="padding:9px 16px" onclick="retryJob('${j.id}')">Retry from where it stopped (reuses the downloaded video)</button></p>`;
+  if (j.status === "done" || j.status === "error") h += `<button class="del" onclick="delJob('${j.id}')">Delete project files (${j.size_mb||0} MB on this computer)</button>`;
+  h += `</div>`;
+  const key = j.status + "|" + (j.clips||[]).length;
+  if (j.status === "done") {
+    if (key === drawnClips && v.dataset.job === j.id) return;
+    drawnClips = key;
+    h += j.clips.map(c => clipHTML(j, c)).join("");
+  }
+  v.dataset.job = j.id; v.innerHTML = h;
+}
+
+async function retryJob(id){
+  const r = await fetch("/api/jobs/"+id+"/retry", {method:"POST"});
+  if (!r.ok) { const j = await r.json(); alert(j.detail || "Could not retry"); return; }
+  drawnClips = ""; openJob(id);
+}
+
+async function delJob(id){
+  if (!confirm("Delete this project and all its files from this computer?")) return;
+  await fetch("/api/jobs/"+id, {method:"DELETE"});
+  cur = null; clearInterval(timer); drawnClips = "";
+  $("#view").innerHTML = '<p class="empty">Project deleted.</p>'; loadHist();
+}
+
+function clipHTML(j, c){
+  const av = c.available || [], pq = av.includes(j.opts.preview_quality) ? j.opts.preview_quality : av[0];
+  if (j.local_deleted || !pq) return `<article class="clip" style="grid-template-columns:1fr"><div><h3>${esc(c.title)}</h3>
+    <div class="meta">${fmt(c.start)} to ${fmt(c.end)} in the source, ${c.duration}s long, score ${Math.round(c.score)}</div>
+    <p class="txt">${esc(c.text)}</p><p class="saved">${j.local_deleted ? "Moved to " + esc(j.saved_to) + " and removed from this computer." : "No local file for this clip."}</p></div></article>`;
+  const parts = Object.entries(c.parts || {}).map(([k,v]) => `<span>${esc(k.replace("ai_","AI ").replace("_"," "))} <b>${v}</b></span>`).join("");
+  return `<article class="clip">
+    <video controls preload="metadata" src="/api/jobs/${j.id}/clips/${c.n}/video?quality=${pq}"></video>
+    <div>
+      <h3>${esc(c.title)}</h3>
+      <div class="meta">${fmt(c.start)} to ${fmt(c.end)} in the source, ${c.duration}s long</div>
+      <div class="score"><strong>${Math.round(c.score)}</strong><div class="meter"><i style="width:${Math.min(100,c.score)}%"></i></div></div>
+      <div class="parts">${parts}</div>
+      ${c.reason ? `<p class="why">${esc(c.reason)}</p>` : ""}
+      <p class="txt">${esc(c.text)}</p>
+      <div class="dl">
+        <select id="q${c.n}">${["1080p","720p","480p"].filter(q => av.includes(q)).map(q => `<option value="${q}" ${q===pq?"selected":""}>${q}</option>`).join("")}</select>
+        <button onclick="dl('${j.id}',${c.n},this)">Download MP4</button>
+      </div>
+    </div></article>`;
+}
+
+async function dl(id, n, btn){
+  const q = $("#q"+n).value, old = btn.textContent;
+  btn.disabled = true; btn.textContent = "Rendering "+q+"...";
+  try {
+    const r = await fetch(`/api/jobs/${id}/clips/${n}/video?quality=${q}&download=true`);
+    if (!r.ok) throw new Error("Render failed");
+    const b = await r.blob(), a = document.createElement("a");
+    const cd = r.headers.get("content-disposition") || "", m = cd.match(/filename="?([^";]+)/);
+    a.href = URL.createObjectURL(b); a.download = m ? m[1] : `clip${n}_${q}.mp4`; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    btn.textContent = "Downloaded";
+  } catch (e) { btn.textContent = "Failed, try again"; }
+  setTimeout(() => { btn.textContent = old; btn.disabled = false; }, 2000);
+}
+
+async function loadHist(){
+  const r = await fetch("/api/jobs"); if (!r.ok) return;
+  const L = await r.json();
+  $("#hist").innerHTML = L.length ? "<h2>Earlier projects</h2>" + L.map(x =>
+    `<button class="h" onclick="openJob('${x.id}')"><span>${esc(x.title)}</span><span class="st">${x.status === "done" ? x.clips+" clips" : x.status}</span></button>`).join("") : "";
+}
+loadHist();
+fetch("/api/destinations").then(r => r.json()).then(L => {
+  $("#dests").innerHTML = L.map(x => `<option value="${esc(x)}">`).join("");
+  $("#destnote").textContent = L.length ? "Google Drive for desktop found. Pick it from the suggestions." :
+    "Google Drive for desktop was not found. Install it, or use an rclone remote (see README).";
+}).catch(() => {});
+fetch("/api/health").then(r => r.json()).then(h => {
+  if (h.warnings.length) $("#warn").innerHTML = h.warnings.map(w => `<div class="warn">${esc(w)}</div>`).join("");
+}).catch(() => {});
+
+// Google Drive Sync
+async function loadDrive() {
+  try {
+    const r = await fetch("/api/drive/status");
+    const d = await r.json();
+    const el = $("#driveStatus");
+    if (!d.configured) {
+      el.innerHTML = '<span style="color:var(--mute);font-size:12.5px">Set GOOGLE_CLIENT_ID in .env to enable direct cloud sync.</span>';
+      return;
+    }
+    if (d.connected) {
+      el.innerHTML = `<span style="color:var(--ok);font-weight:600">✅ Connected</span><br><small style="color:var(--mute)">Clips are auto-uploaded to Google Drive/ClipForge</small><br><button onclick="disconnectDrive()" style="margin-top:6px;background:none;border:1px solid var(--bad);color:var(--bad);border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer">Disconnect</button>`;
+    } else {
+      el.innerHTML = `<button onclick="connectDrive()" style="background:var(--accent);color:var(--accent-ink);border:0;border-radius:6px;padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer;width:100%">Connect Google Drive</button><small style="display:block;color:var(--mute);margin-top:4px;font-size:11.5px">Auto-saves all clips straight to your Drive</small>`;
+    }
+  } catch(e) {}
+}
+
+async function connectDrive() {
+  const r = await fetch("/api/drive/auth");
+  const d = await r.json();
+  if (d.url) {
+    window.open(d.url, "_blank");
+    const check = setInterval(async () => {
+      const res = await fetch("/api/drive/status");
+      const st = await res.json();
+      if (st.connected) { clearInterval(check); loadDrive(); }
+    }, 2000);
+    setTimeout(() => clearInterval(check), 60000);
+  } else {
+    alert(d.detail || "Google Drive setup required.");
+  }
+}
+
+async function disconnectDrive() {
+  if (!confirm("Disconnect Google Drive?")) return;
+  await fetch("/api/drive/disconnect", {method: "POST"});
+  loadDrive();
+}
+
+// Storage Management
+async function loadStorage() {
+  try {
+    const r = await fetch("/api/storage");
+    const d = await r.json();
+    $("#storageText").innerHTML = `Using <b>${d.used_mb} MB</b> · <b>${Math.round(d.free_mb/1024*10)/10} GB</b> free<br><small style="color:var(--mute)">Previews stay visible even after cleaning</small>`;
+  } catch(e) {}
+}
+
+async function cleanAllStorage() {
+  const btn = $("#cleanStorageBtn");
+  btn.disabled = true;
+  btn.textContent = "Cleaning...";
+  try {
+    const r = await fetch("/api/storage/cleanup-all", {method: "POST"});
+    const d = await r.json();
+    alert(`Freed ${d.freed_mb} MB of raw video files! Previews are still available.`);
+    loadStorage();
+  } catch(e) {
+    alert("Could not free space.");
+  }
+  btn.disabled = false;
+  btn.textContent = "Free space";
+}
+
+loadDrive();
+loadStorage();
+</script>
+</body>
+</html>

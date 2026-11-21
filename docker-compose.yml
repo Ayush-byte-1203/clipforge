@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  clipforge:
+    build: .
+    container_name: clipforge
+    restart: always
+    ports:
+      - "80:8787"
+    volumes:
+      - clipforge_data:/data
+    env_file:
+      - .env
+    environment:
+      - CLIPFORGE_HOST=0.0.0.0
+      - CLIPFORGE_PORT=8787
+
+volumes:
+  clipforge_data:
