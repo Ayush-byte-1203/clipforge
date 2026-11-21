@@ -393,6 +393,8 @@ def _callback_uri(request: Request) -> str:
     host = request.headers.get("x-forwarded-host") or request.url.netloc
     if "onrender.com" in str(host) or proto == "https":
         return f"https://{host}/api/drive/callback"
+    if "127.0.0.1" in str(host) or "localhost" in str(host):
+        return "http://localhost:8787/api/drive/callback"
     return f"{str(request.base_url).rstrip('/')}/api/drive/callback"
 
 
