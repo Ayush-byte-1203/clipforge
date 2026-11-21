@@ -27,6 +27,13 @@ ROOT = Path(__file__).parent
 DATA = Path(os.environ.get("CLIPFORGE_DATA", ROOT / "data")).resolve()
 (DATA / "jobs").mkdir(parents=True, exist_ok=True)
 
+# Write cookies.txt from env var if present (for cloud deployments like Render)
+if os.environ.get("YOUTUBE_COOKIES"):
+    try:
+        (DATA / "cookies.txt").write_text(os.environ["YOUTUBE_COOKIES"].strip(), encoding="utf-8")
+    except Exception:
+        pass
+
 app = FastAPI(title="ClipForge")
 JOBS: dict[str, dict] = {}
 JOB_LOCK = threading.Lock()
@@ -231,6 +238,8 @@ def create_job(
     if remove_local and not save_to.strip():
         raise HTTPException(400, "To remove local copies, also enter where to save the clips.")
     cookies_browser, cookies_file = cookies_browser.strip().lower(), cookies_file.strip()
+    if not cookies_file and (DATA / "cookies.txt").is_file():
+        cookies_file = str(DATA / "cookies.txt")
     if cookies_browser not in ("", "chrome", "firefox", "safari", "edge", "brave", "chromium", "opera", "vivaldi"):
         raise HTTPException(400, "Unknown browser for cookies.")
     if cookies_file and not Path(cookies_file).expanduser().is_file():
