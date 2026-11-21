@@ -121,8 +121,9 @@ def download(url: str, out_dir: Path, live_minutes: int, report, max_height: int
     if cookies_file:
         base["cookiefile"] = cookies_file
     elif cookies_browser:
-        import sys
-        if sys.platform in ("darwin", "win32"):
+        if cookies_browser.lower() == "safari":
+            print("[clipforge] Safari cookies are protected by macOS privacy sandbox. Continuing without browser cookies.")
+        elif sys.platform in ("darwin", "win32"):
             base["cookiesfrombrowser"] = (cookies_browser,)
         else:
             print(f"[clipforge] Ignoring '{cookies_browser}' browser cookies on {sys.platform} (browser cookies require a local desktop)")
@@ -142,7 +143,7 @@ def download(url: str, out_dir: Path, live_minutes: int, report, max_height: int
             break
         except (ValueError, yt_dlp.utils.DownloadError, Exception) as e:
             err_str = str(e).lower()
-            if ("unsupported platform" in err_str or "operation not permitted" in err_str or "permission" in err_str) and "cookiesfrombrowser" in o:
+            if ("unsupported platform" in err_str or "operation not permitted" in err_str or "permission" in err_str or "cookies" in err_str) and ("cookiesfrombrowser" in o or "cookiesfrombrowser" in base):
                 print(f"[clipforge] Browser cookies access failed ({e}), continuing without cookies...")
                 o.pop("cookiesfrombrowser", None)
                 base.pop("cookiesfrombrowser", None)
@@ -157,6 +158,10 @@ def download(url: str, out_dir: Path, live_minutes: int, report, max_height: int
             last = e
             if re.search(r"format is not available|only images|no video formats|sign in|confirm you|bot|forbidden", str(e), re.I):
                 report("YouTube restricted format, trying alternate player client...")
+                continue
+            if "operation not permitted" in err_str and "cookies" in err_str:
+                base.pop("cookiesfrombrowser", None)
+                o.pop("cookiesfrombrowser", None)
                 continue
             raise
     if info is None:
@@ -269,7 +274,8 @@ def transcribe(wav: Path, model_size: str, language: str | None, duration: float
     except Exception:
         pass
     report(f"Loading speech model '{model_size}' ({device})...")
-    model = WhisperModel(model_size, device=device, compute_type=ctype)
+    threads = max(4, os.cpu_count() or 4)
+    model = WhisperModel(model_size, device=device, compute_type=ctype, cpu_threads=threads)
     kw = dict(word_timestamps=True, vad_filter=True, beam_size=1, language=language or None)
     try:
         segs, info = model.transcribe(str(wav), **kw)

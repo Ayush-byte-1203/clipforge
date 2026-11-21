@@ -1,6 +1,7 @@
 """ClipForge local web server.  Run:  python server.py   then open http://localhost:8787"""
 from __future__ import annotations
 
+import datetime
 import json
 import os
 import re
@@ -13,7 +14,7 @@ from pathlib import Path
 
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    load_dotenv(Path(__file__).parent / ".env")
 except ImportError:
     pass
 
@@ -128,6 +129,52 @@ def worker(jid: str, url: str, source: Path | None, opts: dict):
             except Exception as e:
                 print(f"[clipforge drive upload error] {e}")
                 job.setdefault("notes", []).append(f"Google Drive note: {str(e)[:150]}")
+
+            # Auto-publish to YouTube Shorts if enabled & connected
+            if opts.get("auto_publish_youtube"):
+                try:
+                    import youtube_publisher
+                    if youtube_publisher.is_connected():
+                        report("Auto-publishing clips to YouTube Shorts...", 0.98, "render")
+                        privacy = opts.get("youtube_privacy", "public")
+                        sched_mode = opts.get("youtube_schedule", "instant")
+                        now = datetime.datetime.now(datetime.timezone.utc)
+                        interval_hours = {"interval_2h": 2, "interval_4h": 4, "interval_6h": 6, "daily": 24}.get(sched_mode, 0)
+
+                        for idx, c in enumerate(job.get("clips", [])):
+                            best_qual = next((q for q in ("1080p", "720p", "480p") if (jdir(jid) / "clips" / f"clip{c['n']:02d}_{q}.mp4").exists()), None)
+                            if not best_qual:
+                                continue
+                            clip_file = jdir(jid) / "clips" / f"clip{c['n']:02d}_{best_qual}.mp4"
+                            meta = youtube_publisher.generate_metadata(
+                                clip_title=c.get("title", f"Clip {c['n']}"),
+                                clip_text=c.get("text", ""),
+                                source_title=job.get("title", ""),
+                                hf_token=opts.get("hf_token", ""),
+                            )
+                            c["youtube_metadata"] = meta
+                            pub_time = None
+                            if interval_hours > 0:
+                                pub_time = now + datetime.timedelta(hours=(idx + 1) * interval_hours)
+
+                            up_res = youtube_publisher.upload_short(
+                                video_path=clip_file,
+                                title=meta["title"],
+                                description=meta["description"],
+                                tags=meta["tags"],
+                                privacy_status=privacy,
+                                publish_at=pub_time,
+                            )
+                            c["youtube_url"] = up_res["url"]
+                            c["youtube_video_id"] = up_res["video_id"]
+                            c["youtube_privacy"] = privacy
+                            c["youtube_scheduled"] = up_res.get("scheduled")
+                            c["youtube_status"] = "published" if not pub_time else "scheduled"
+                            job.setdefault("notes", []).append(f"Published Short {c['n']}: {up_res['url']}")
+                except Exception as e:
+                    print(f"[clipforge youtube auto-publish error] {e}")
+                    job.setdefault("notes", []).append(f"YouTube auto-publish note: {str(e)[:150]}")
+
             if opts.get("delete_source", True):
                 for f in list(jdir(jid).glob("source.*")) + [jdir(jid) / "audio.wav"]:
                     f.unlink(missing_ok=True)
@@ -236,6 +283,7 @@ def create_job(
     hf_token: str = Form(""), llm_model: str = Form(""), qualities: str = Form("720p,1080p"),
     source_height: int = Form(1080), delete_source: bool = Form(True), save_to: str = Form(""),
     remove_local: bool = Form(False), cookies_browser: str = Form(""), cookies_file: str = Form(""),
+    auto_publish_youtube: bool = Form(False), youtube_privacy: str = Form("public"), youtube_schedule: str = Form("instant"),
 ):
     url = url.strip()
     if not url and not (file and file.filename):
@@ -288,7 +336,8 @@ def create_job(
                 source_height=source_height if source_height in (480, 720, 1080) else 1080,
                 delete_source=delete_source, save_to=save_to.strip(), remove_local=remove_local,
                 hf_token=hf_token.strip(), llm_model=llm_model.strip(),
-                cookies_browser=cookies_browser, cookies_file=str(Path(cookies_file).expanduser()) if cookies_file else "")
+                cookies_browser=cookies_browser, cookies_file=str(Path(cookies_file).expanduser()) if cookies_file else "",
+                auto_publish_youtube=auto_publish_youtube, youtube_privacy=youtube_privacy, youtube_schedule=youtube_schedule)
     job = {"id": jid, "title": title, "url": url, "status": "queued", "stage": "download", "progress": 0.0,
            "message": "Waiting to start...", "error": "", "created": time.time(), "clips": [],
            "opts": {k: v for k, v in opts.items() if k != "hf_token"}}
@@ -429,6 +478,87 @@ def drive_disconnect():
     import drive
     drive.disconnect()
     return {"ok": True}
+
+
+# ----------------------------------------------------------------------------- YouTube Shorts
+def _yt_callback_uri(request: Request) -> str:
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+    host = request.headers.get("x-forwarded-host") or request.url.netloc
+    if "onrender.com" in str(host) or proto == "https":
+        return f"https://{host}/api/youtube/callback"
+    if "127.0.0.1" in str(host) or "localhost" in str(host):
+        return "http://localhost:8787/api/youtube/callback"
+    return f"{str(request.base_url).rstrip('/')}/api/youtube/callback"
+
+
+@app.get("/api/youtube/status")
+def youtube_status():
+    import youtube_publisher
+    return youtube_publisher.get_status()
+
+
+@app.get("/api/youtube/auth")
+def youtube_auth(request: Request):
+    import youtube_publisher
+    cb = _yt_callback_uri(request)
+    url = youtube_publisher.get_auth_url(cb)
+    if not url:
+        raise HTTPException(400, "Google credentials not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.")
+    return {"url": url}
+
+
+@app.get("/api/youtube/callback")
+def youtube_callback(code: str, request: Request):
+    import youtube_publisher
+    cb = _yt_callback_uri(request)
+    ok, err_msg = youtube_publisher.handle_callback(code, cb)
+    if not ok:
+        return HTMLResponse(f"<body style='font-family:sans-serif;padding:40px;text-align:center;'><h2>❌ Could not connect YouTube Channel</h2><p style='color:#c00;'>{err_msg}</p><p>Please check your credentials or try again.</p></body>")
+    return HTMLResponse("<body style='font-family:sans-serif;padding:40px;text-align:center;'><h2>✅ YouTube Channel Connected!</h2><p>ClipForge is now authorized to publish YouTube Shorts to your channel.</p><p>You can close this tab now.</p><script>setTimeout(() => window.close(), 2500);</script></body>")
+
+
+@app.post("/api/youtube/disconnect")
+def youtube_disconnect():
+    import youtube_publisher
+    youtube_publisher.disconnect()
+    return {"ok": True}
+
+
+@app.post("/api/jobs/{jid}/clips/{n}/publish-youtube")
+def manual_publish_clip_youtube(jid: str, n: int, title: str = Form(""), privacy: str = Form("public")):
+    import youtube_publisher
+    if not youtube_publisher.is_connected():
+        raise HTTPException(400, "YouTube account is not connected. Connect your YouTube channel first.")
+    job = JOBS.get(jid)
+    if not job or not (1 <= n <= len(job.get("clips", []))):
+        raise HTTPException(404, "Clip not found")
+    c = job["clips"][n - 1]
+    best_qual = next((q for q in ("1080p", "720p", "480p") if (jdir(jid) / "clips" / f"clip{n:02d}_{q}.mp4").exists()), None)
+    if not best_qual:
+        best_qual = "720p"
+        render(jid, n, best_qual)
+    clip_file = jdir(jid) / "clips" / f"clip{n:02d}_{best_qual}.mp4"
+    meta = youtube_publisher.generate_metadata(
+        clip_title=title or c.get("title", f"Clip {n}"),
+        clip_text=c.get("text", ""),
+        source_title=job.get("title", ""),
+    )
+    if title:
+        meta["title"] = f"{title} #Shorts" if "#shorts" not in title.lower() else title
+    up_res = youtube_publisher.upload_short(
+        video_path=clip_file,
+        title=meta["title"],
+        description=meta["description"],
+        tags=meta["tags"],
+        privacy_status=privacy,
+    )
+    c["youtube_url"] = up_res["url"]
+    c["youtube_video_id"] = up_res["video_id"]
+    c["youtube_privacy"] = privacy
+    c["youtube_status"] = "published"
+    c["youtube_metadata"] = meta
+    save(job)
+    return up_res
 
 
 @app.get("/api/storage")
