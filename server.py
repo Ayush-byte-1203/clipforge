@@ -26,8 +26,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 import core
 
 ROOT = Path(__file__).parent
-_default_data = Path("/tmp/clipforge_data") if (os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")) else (ROOT / "data")
-DATA = Path(os.environ.get("CLIPFORGE_DATA", _default_data)).resolve()
+DATA = Path(os.environ.get("CLIPFORGE_DATA", ROOT / "data")).resolve()
 (DATA / "jobs").mkdir(parents=True, exist_ok=True)
 
 # Write cookies.txt from env var if present (for cloud deployments like Render)
@@ -139,7 +138,9 @@ def worker(jid: str, url: str, source: Path | None, opts: dict):
         # render the preview quality for every clip in parallel (2 workers on Apple Silicon)
         quals = opts["qualities"]
         total, done = len(job["clips"]) * len(quals), 0
-        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        is_low_mem = bool(os.environ.get("RENDER") or os.environ.get("LOW_MEMORY") or os.environ.get("SPACE_ID"))
+        max_render_workers = 1 if is_low_mem else 2
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_render_workers) as pool:
             futures = {pool.submit(render, jid, c["n"], q): (c["n"], q) for c in job["clips"] for q in quals}
             for fut in concurrent.futures.as_completed(futures):
                 try:
@@ -147,6 +148,9 @@ def worker(jid: str, url: str, source: Path | None, opts: dict):
                 except Exception as ex:
                     print(f"[clipforge render error] {ex}")
                 done += 1
+                if is_low_mem:
+                    import gc
+                    gc.collect()
                 report(f"Rendering clips ({done}/{total})...", 0.75 + 0.2 * done / max(1, total), "render")
         dest = opts.get("save_to", "")
         if dest:

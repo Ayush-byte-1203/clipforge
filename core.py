@@ -41,8 +41,7 @@ def ensure_ffmpeg_in_path():
 
 ensure_ffmpeg_in_path()
 
-_default_data = Path("/tmp/clipforge_data") if (os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")) else (Path(__file__).parent / "data")
-DATA_DIR = Path(os.environ.get("CLIPFORGE_DATA", _default_data)).resolve()
+DATA_DIR = Path(os.environ.get("CLIPFORGE_DATA", Path(__file__).parent / "data")).resolve()
 
 
 def _apply_cookie_opts(target_opts: dict, cookies_file: str = "", cookies_browser: str = ""):
@@ -312,7 +311,8 @@ def transcribe(wav: Path, model_size: str, language: str | None, duration: float
     except Exception:
         pass
     report(f"Loading speech model '{model_size}' ({device})...")
-    threads = max(4, os.cpu_count() or 4)
+    is_low_mem = bool(os.environ.get("RENDER") or os.environ.get("LOW_MEMORY") or os.environ.get("SPACE_ID"))
+    threads = 2 if is_low_mem else max(2, min(4, os.cpu_count() or 4))
     model = WhisperModel(model_size, device=device, compute_type=ctype, cpu_threads=threads)
 
     task = "transcribe"
@@ -353,7 +353,15 @@ def transcribe(wav: Path, model_size: str, language: str | None, duration: float
             if t:
                 words.append({"w": t, "s": round(float(w.start), 2), "e": round(float(w.end), 2)})
         report(f"Transcribing... {int(100 * min(1, s.end / max(duration, 1)))}%", min(1, s.end / max(duration, 1)))
-    return {"language": info.language, "words": words}
+    res = {"language": info.language, "words": words}
+    try:
+        del model
+        del segs
+        import gc
+        gc.collect()
+    except Exception:
+        pass
+    return res
 
 
 def energy_per_second(wav: Path) -> list[float]:
@@ -810,7 +818,11 @@ def render_clip(src: Path, clip: dict, words: list[dict], vinfo: dict, quality: 
 
     v_tagged = "[v_caps]" if use_gs else "[v]"
     graph = base + (f";[vb]ass=cap.ass:fontsdir=fonts{v_tagged}" if use_caps else f";[vb]null{v_tagged}")
-    cmd = [ffmpeg_bin(), "-y", "-ss", f"{start:.2f}", "-t", f"{dur:.2f}", "-i", src]
+    is_low_mem = bool(os.environ.get("RENDER") or os.environ.get("LOW_MEMORY") or os.environ.get("SPACE_ID"))
+    cmd = [ffmpeg_bin(), "-y"]
+    if is_low_mem:
+        cmd += ["-threads", "1"]
+    cmd += ["-ss", f"{start:.2f}", "-t", f"{dur:.2f}", "-i", src]
 
     if use_gs:
         cta_start = max(0.0, dur - 6.5)
@@ -830,6 +842,9 @@ def render_clip(src: Path, clip: dict, words: list[dict], vinfo: dict, quality: 
     cmd += ["-c:v", "libx264", "-preset", "ultrafast", "-crf", crf, "-pix_fmt", "yuv420p",
             "-t", f"{dur:.2f}", "-movflags", "+faststart", out.resolve()]
     run(cmd, cwd=work)
+    if is_low_mem:
+        import gc
+        gc.collect()
     return out
 
 

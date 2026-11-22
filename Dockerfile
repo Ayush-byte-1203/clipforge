@@ -16,7 +16,7 @@ RUN curl -fsSL https://deno.land/install.sh | sh -s -- -y
 ENV PATH="/home/appuser/.deno/bin:${PATH}"
 
 # Install Python dependencies
-COPY requirements-full.txt ./requirements.txt
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
@@ -27,6 +27,11 @@ RUN mkdir -p /data && chown -R appuser:appuser /app /data /home/appuser/.deno
 
 USER appuser
 
+# Optimize memory for 512MB RAM cloud containers (Render, Heroku, etc.)
+# MALLOC_ARENA_MAX=2 stops glibc from allocating dozens of memory arenas on multi-core hosts
+ENV MALLOC_ARENA_MAX=2
+ENV PYTHONUNBUFFERED=1
+ENV RENDER=true
 ENV CLIPFORGE_DATA=/data
 ENV CLIPFORGE_HOST=0.0.0.0
 
