@@ -24,6 +24,43 @@ DEFAULT_LLMS = [
 # ----------------------------------------------------------------------------- helpers
 
 
+def ensure_ffmpeg_in_path():
+    venv_bin = Path(__file__).parent / ".venv" / "bin"
+    if venv_bin.exists():
+        ff_link = venv_bin / "ffmpeg"
+        if not ff_link.exists():
+            try:
+                import imageio_ffmpeg
+                ff_link.symlink_to(imageio_ffmpeg.get_ffmpeg_exe())
+            except Exception:
+                pass
+        curr_path = os.environ.get("PATH", "")
+        if str(venv_bin) not in curr_path:
+            os.environ["PATH"] = f"{venv_bin}:{curr_path}"
+
+
+ensure_ffmpeg_in_path()
+
+DATA_DIR = Path(os.environ.get("CLIPFORGE_DATA", Path(__file__).parent / "data")).resolve()
+
+
+def _apply_cookie_opts(target_opts: dict, cookies_file: str = "", cookies_browser: str = ""):
+    """Ensure yt-dlp receives authenticated cookies to prevent 'Sign in to confirm you’re not a bot'."""
+    if cookies_file and Path(cookies_file).expanduser().is_file():
+        target_opts["cookiefile"] = str(Path(cookies_file).expanduser())
+    elif (DATA_DIR / "cookies.txt").is_file():
+        target_opts["cookiefile"] = str(DATA_DIR / "cookies.txt")
+    elif cookies_browser:
+        if cookies_browser.lower() != "safari" and sys.platform in ("darwin", "win32"):
+            target_opts["cookiesfrombrowser"] = (cookies_browser,)
+    elif sys.platform in ("darwin", "win32"):
+        # Auto-fallback to Chrome cookies if present on Mac/Windows desktop
+        try:
+            target_opts["cookiesfrombrowser"] = ("chrome",)
+        except Exception:
+            pass
+
+
 def ffmpeg_bin() -> str:
     p = shutil.which("ffmpeg")
     if p:
@@ -118,15 +155,7 @@ def download(url: str, out_dir: Path, live_minutes: int, report, max_height: int
     js = find_js_runtimes()
     if js:
         base["js_runtimes"] = js
-    if cookies_file:
-        base["cookiefile"] = cookies_file
-    elif cookies_browser:
-        if cookies_browser.lower() == "safari":
-            print("[clipforge] Safari cookies are protected by macOS privacy sandbox. Continuing without browser cookies.")
-        elif sys.platform in ("darwin", "win32"):
-            base["cookiesfrombrowser"] = (cookies_browser,)
-        else:
-            print(f"[clipforge] Ignoring '{cookies_browser}' browser cookies on {sys.platform} (browser cookies require a local desktop)")
+    _apply_cookie_opts(base, cookies_file, cookies_browser)
     if not shutil.which("ffmpeg"):
         base["ffmpeg_location"] = ffmpeg_bin()
 
@@ -262,6 +291,14 @@ def load_wav_float32(wav: Path):
     return np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
 
 
+def clean_transcript_word(w: str) -> str:
+    """Clean hallucinated Arabic/Persian symbols, bad punctuation merges, and artifacts."""
+    w = re.sub(r"[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\u0000-\u001F]+", "", w)
+    w = re.sub(r"(\w+)'re\b", r"\1 are", w)
+    w = re.sub(r"[śźżłćń]+", "", w)
+    return w.strip()
+
+
 def transcribe(wav: Path, model_size: str, language: str | None, duration: float, report) -> dict:
     from faster_whisper import WhisperModel
 
@@ -276,7 +313,31 @@ def transcribe(wav: Path, model_size: str, language: str | None, duration: float
     report(f"Loading speech model '{model_size}' ({device})...")
     threads = max(4, os.cpu_count() or 4)
     model = WhisperModel(model_size, device=device, compute_type=ctype, cpu_threads=threads)
-    kw = dict(word_timestamps=True, vad_filter=True, beam_size=1, language=language or None)
+
+    task = "transcribe"
+    clean_lang = (language or "").strip().lower()
+    if clean_lang == "hi_en":
+        # Indian gaming / Hinglish: Translate Hindi audio to clean English subtitles
+        clean_lang = "hi"
+        task = "translate"
+    elif clean_lang in ("translate", "en_translate"):
+        clean_lang = None
+        task = "translate"
+    elif not clean_lang:
+        clean_lang = None
+
+    kw = dict(
+        word_timestamps=True,
+        vad_filter=True,
+        vad_parameters=dict(min_silence_duration_ms=400),
+        beam_size=5,
+        best_of=5,
+        temperature=[0.0, 0.2],
+        condition_on_previous_text=False,
+        language=clean_lang,
+        task=task,
+        initial_prompt="Clean dialogue with proper punctuation, grammar, and spelling.",
+    )
     try:
         segs, info = model.transcribe(str(wav), **kw)
     except TypeError as e:  # old PyAV on this machine can't open the file: decode the wav ourselves instead
@@ -287,7 +348,7 @@ def transcribe(wav: Path, model_size: str, language: str | None, duration: float
     words = []
     for s in segs:  # generator: streams, so videos of any length work
         for w in s.words or []:
-            t = w.word.strip()
+            t = clean_transcript_word(w.word)
             if t:
                 words.append({"w": t, "s": round(float(w.start), 2), "e": round(float(w.end), 2)})
         report(f"Transcribing... {int(100 * min(1, s.end / max(duration, 1)))}%", min(1, s.end / max(duration, 1)))
@@ -464,20 +525,27 @@ def find_clips(words, duration, energy, opts, report) -> tuple[list[dict], list[
         return [{"start": 0.0, "end": min(duration, max_len), "score": 50.0, "text": txt,
                  "title": (txt[:60] or "Full video"), "reason": "Source is shorter than the minimum clip length", "parts": {}}], notes
     sents = build_sentences(words)
-    if len(words) < 8:  # no speech: fall back to loudness-only windows
+    if duration > 0:
+        sents = [s for s in sents if s["s"] < duration]
+    if len(words) < 8 or not sents:  # no speech or empty: fall back to loudness-only windows
         notes.append("No speech detected, ranking by audio energy only.")
-        sents = [{"s": t, "e": min(duration, t + 8.0), "text": "", "n": 0} for t in range(0, int(duration) - 7, 8)]
+        sents = [{"s": t, "e": min(duration, t + 8.0), "text": "", "n": 0} for t in range(0, max(1, int(duration) - 7), 8)]
     flat = [x for x in energy if x > 0] or [0.0]
     gmean = sum(flat) / len(flat)
     gstd = (sum((x - gmean) ** 2 for x in flat) / len(flat)) ** 0.5
     items = []
     for i, j in candidates(sents, min_len, max_len):
+        c_start = max(0.0, sents[i]["s"] - 0.15)
+        c_end = min(duration, sents[j]["e"] + 0.35)
+        if c_end <= c_start or (c_end - c_start) < min_len * 0.7:
+            continue
         sc, parts = heuristic_score(sents, i, j, energy, gmean, gstd)
-        items.append({"start": max(0.0, sents[i]["s"] - 0.15), "end": min(duration, sents[j]["e"] + 0.35),
+        items.append({"start": c_start, "end": c_end,
                       "score": sc, "heur": sc, "parts": parts, "text": " ".join(s["text"] for s in sents[i : j + 1]),
                       "first": sents[i]["text"]})
     if not items:  # e.g. one endless sentence
-        items = [{"start": 0.0, "end": min(duration, max_len), "score": 40.0, "heur": 40.0, "parts": {},
+        safe_end = min(duration, max_len)
+        items = [{"start": 0.0, "end": max(min_len, safe_end), "score": 40.0, "heur": 40.0, "parts": {},
                   "text": " ".join(w["w"] for w in words), "first": ""}]
     pool = pick_non_overlapping(items, max(k * 3, 12), max_ov=0.3)
     token = (opts.get("hf_token") or os.environ.get("HF_TOKEN") or "").strip()
@@ -614,8 +682,9 @@ def make_ass(words: list[dict], dur: float, title: str, opts: dict) -> str:
             "[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, "
             "Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, "
             "MarginR, MarginV, Encoding\n"
-            "Style: Cap,Poppins,74,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,7,2,2,60,60,520,1\n"
-            "Style: Hook,Poppins,58,&H00000000,&H000000FF,&H00FFFFFF,&H00FFFFFF,-1,0,0,0,100,100,0,0,3,16,0,8,80,80,190,1\n\n"
+            "Style: Cap,Poppins,64,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,7,2,2,60,60,220,1\n"
+            "Style: Hook,Poppins,58,&H00000000,&H000000FF,&H00FFFFFF,&H00FFFFFF,-1,0,0,0,100,100,0,0,3,16,0,8,80,80,190,1\n"
+            "Style: CTA,Poppins,56,&H00FFFFFF,&H000000FF,&H00000000,&HCC000000,-1,0,0,0,100,100,0,0,3,14,0,8,60,60,140,1\n\n"
             "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n")
     ev = []
     if opts.get("hook", True) and title:
@@ -651,23 +720,47 @@ def make_ass(words: list[dict], dur: float, title: str, opts: dict) -> str:
                     tx = _clean(x["w"].upper() if up else x["w"])
                     parts.append(f"{{\\1c{hi}\\fscx112\\fscy112}}{tx}{{\\r}}" if m == k else tx)
                 ev.append(f"Dialogue: 0,{_t(t0)},{_t(t1)},Cap,,0,0,0,,{' '.join(parts)}")
+    if opts.get("cta", True) and dur >= 5.0:
+        cta_start = max(0.0, dur - 4.5)
+        cta_text = "{\\fad(400,200)\\b1\\c&H00D7FF&}👍 LIKE {\\c&HFFFFFF&}• {\\c&H00FFFF&}🔄 SHARE {\\c&HFFFFFF&}• {\\c&H0000FF&}🔔 SUBSCRIBE!"
+        ev.append(f"Dialogue: 2,{_t(cta_start)},{_t(dur)},CTA,,0,0,0,,{cta_text}")
     return head + "\n".join(ev) + "\n"
 
 
 # ----------------------------------------------------------------------------- render
 
 
-def render_clip(src: Path, clip: dict, words: list[dict], vinfo: dict, quality: str, out: Path, opts: dict, work: Path):
+def render_clip(src: Path, clip: dict, words: list[dict], vinfo: dict, quality: str, out: Path, opts: dict, work: Path, offset_words: float = 0.0):
     tw, th, crf = QUALITIES[quality]
     W, H = vinfo["width"], vinfo["height"]
     start, end = clip["start"], clip["end"]
     dur = end - start
     work.mkdir(parents=True, exist_ok=True)
-    cw_ = [{"w": w["w"], "s": round(w["s"] - start, 2), "e": round(w["e"] - start, 2)}
-           for w in words if w["s"] >= start - 0.05 and w["e"] <= end + 0.05]
-    use_caps = bool(opts.get("captions", True) and cw_) or bool(opts.get("hook", True))
+    t_ref = offset_words if offset_words > 0 else start
+    cw_ = [{"w": w["w"], "s": round(w["s"] - t_ref, 2), "e": round(w["e"] - t_ref, 2)}
+           for w in words if w["s"] >= t_ref - 0.05 and w["e"] <= (t_ref + dur) + 0.05]
+
+    assets_dir = Path(__file__).parent / "assets"
+    gs_overlay = None
+    for cand_name in ("like share subscribe.mp4", "subscribe.mp4", "subscribe_greenscreen.mp4"):
+        if (assets_dir / cand_name).exists():
+            gs_overlay = assets_dir / cand_name
+            break
+    if not gs_overlay:
+        for p in assets_dir.glob("*.mp4"):
+            if any(k in p.name.lower() for k in ("subscribe", "greenscreen", "like")):
+                gs_overlay = p
+                break
+
+    gs_color = "0x00D605" if (gs_overlay and "like" in gs_overlay.name.lower()) else "0x00FF00"
+    use_gs = bool(opts.get("cta", True) and gs_overlay and gs_overlay.exists() and dur >= 5.0)
+    opts_ass = dict(opts)
+    if use_gs:
+        opts_ass["cta"] = False
+
+    use_caps = bool(opts.get("captions", True) and cw_) or bool(opts.get("hook", True)) or bool(opts_ass.get("cta", False))
     if use_caps:
-        (work / "cap.ass").write_text(make_ass(cw_, dur, clip.get("title", ""), opts), encoding="utf-8")
+        (work / "cap.ass").write_text(make_ass(cw_, dur, clip.get("title", ""), opts_ass), encoding="utf-8")
         (work / "fonts").mkdir(exist_ok=True)
         for f in (Path(__file__).parent / "assets" / "fonts").glob("*.ttf"):
             shutil.copyfile(f, work / "fonts" / f.name)
@@ -687,19 +780,188 @@ def render_clip(src: Path, clip: dict, words: list[dict], vinfo: dict, quality: 
                 keys = [[0.0, (W - cw) / 2]]
             kf.write_text(json.dumps(keys))
         base = f"[0:v]crop={cw}:{H}:x='{x_expr(keys)}':y=0,scale={tw}:{th}:flags=lanczos,setsar=1[vb]"
-    elif layout == "fit":  # whole frame centred over a blurred copy
-        base = (f"[0:v]split=2[a][b];[a]scale={tw}:{th}:force_original_aspect_ratio=increase,crop={tw}:{th},"
-                f"boxblur=25:3[bg];[b]scale={tw}:-2[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1[vb]")
+    elif layout == "fit":  # whole frame centred over a blurred copy (ultra-fast downscaled blur)
+        base = (f"[0:v]split=2[a][b];[a]scale=180:320:force_original_aspect_ratio=increase,crop=180:320,"
+                f"boxblur=4:1,scale={tw}:{th}:flags=bilinear[bg];[b]scale={tw}:-2[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1[vb]")
+    elif layout == "split":  # Gaming Split: Top = Webcam (face-tracked), Bottom = Gameplay
+        top_h = int(th * 0.45) // 2 * 2
+        bot_h = th - top_h
+        cw_face = int(H * (tw / top_h)) // 2 * 2
+        cw_face = min(W, max(int(W * 0.4), cw_face))
+        kf = work / "crop_face.json"
+        if kf.exists():
+            keys = json.loads(kf.read_text())
+        else:
+            try:
+                keys = face_keys(src, start, dur, W, H, cw_face)
+            except Exception:
+                keys = [[0.0, (W - cw_face) / 2]]
+            kf.write_text(json.dumps(keys))
+        cw_game = int(H * (tw / bot_h)) // 2 * 2
+        cw_game = min(W, cw_game)
+        base = (f"[0:v]split=2[t_in][b_in];"
+                f"[t_in]crop={cw_face}:{H}:x='{x_expr(keys)}':y=0,scale={tw}:{top_h}:flags=lanczos,setsar=1[top];"
+                f"[b_in]crop={cw_game}:{H}:(in_w-{cw_game})/2:0,scale={tw}:{bot_h}:flags=lanczos,setsar=1[bot];"
+                f"[top][bot]vstack=inputs=2,setsar=1[vb]")
     else:  # already portrait
         ch = int(W * 16 / 9) // 2 * 2
         base = f"[0:v]crop={W}:{min(ch, H)}:0:(ih-{min(ch, H)})/2,scale={tw}:{th},setsar=1[vb]"
-    graph = base + (";[vb]ass=cap.ass:fontsdir=fonts[v]" if use_caps else ";[vb]null[v]")
-    cmd = [ffmpeg_bin(), "-y", "-ss", f"{start:.2f}", "-t", f"{dur:.2f}", "-i", src,
-           "-filter_complex", graph, "-map", "[v]", "-map", "0:a:0?",
-           "-c:v", "libx264", "-preset", "veryfast", "-crf", crf, "-pix_fmt", "yuv420p",
-           "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", out.resolve()]
+
+    v_tagged = "[v_caps]" if use_gs else "[v]"
+    graph = base + (f";[vb]ass=cap.ass:fontsdir=fonts{v_tagged}" if use_caps else f";[vb]null{v_tagged}")
+    cmd = [ffmpeg_bin(), "-y", "-ss", f"{start:.2f}", "-t", f"{dur:.2f}", "-i", src]
+
+    if use_gs:
+        cta_start = max(0.0, dur - 6.5)
+        cmd += ["-stream_loop", "-1", "-i", str(gs_overlay)]
+        graph += (f";[1:v]colorkey={gs_color}:0.28:0.12,scale={tw}:-1[ck];"
+                  f"[v_caps][ck]overlay=(W-w)/2:H-h-240:enable='gte(t,{cta_start:.2f})'[v]")
+        if vinfo.get("has_audio"):
+            graph += f";[0:a:0?][1:a]amix=inputs=2:duration=first[a_raw];[a_raw]loudnorm=I=-16:TP=-1.5:LRA=11[a]"
+            cmd += ["-filter_complex", graph, "-map", "[v]", "-map", "[a]", "-c:a", "aac", "-b:a", "160k"]
+        else:
+            cmd += ["-filter_complex", graph, "-map", "[v]"]
+    else:
+        cmd += ["-filter_complex", graph, "-map", "[v]"]
+        if vinfo.get("has_audio"):
+            cmd += ["-map", "0:a:0?", "-af", "loudnorm=I=-16:TP=-1.5:LRA=11", "-c:a", "aac", "-b:a", "160k"]
+
+    cmd += ["-c:v", "libx264", "-preset", "ultrafast", "-crf", crf, "-pix_fmt", "yuv420p",
+            "-t", f"{dur:.2f}", "-movflags", "+faststart", out.resolve()]
     run(cmd, cwd=work)
     return out
+
+
+def extract_cloud_transcript(info: dict, ydl=None) -> dict | None:
+    """Extract word-level or segment-level transcript from YouTube subtitles/auto-captions without downloading media."""
+    subs = info.get("subtitles") or {}
+    auto = info.get("automatic_captions") or {}
+    preferred_langs = ("en", "en-orig", "en-US", "en-GB", "hi", "es")
+    candidates = []
+
+    for s_dict in (subs, auto):
+        for lang in preferred_langs:
+            if lang in s_dict:
+                candidates.extend(s_dict[lang])
+        if not candidates:
+            for lang, fmts in s_dict.items():
+                if fmts:
+                    candidates.extend(fmts)
+                    break
+        if candidates:
+            break
+
+    if not candidates:
+        return None
+
+    target = next((c for c in candidates if c.get("ext") == "json3"), None)
+    if not target:
+        target = next((c for c in candidates if c.get("ext") in ("vtt", "srv3")), candidates[0] if candidates else None)
+
+    if not target or not target.get("url"):
+        return None
+
+    try:
+        if ydl:
+            resp = ydl.urlopen(target["url"])
+            content = resp.read().decode("utf-8", errors="replace")
+        else:
+            import urllib.request
+            req = urllib.request.Request(target["url"], headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                content = resp.read().decode("utf-8", errors="replace")
+
+        words = []
+        if target.get("ext") == "json3":
+            data = json.loads(content)
+            for ev in data.get("events", []):
+                t_start = ev.get("tStartMs", 0) / 1000.0
+                dur = ev.get("dDurationMs", 0) / 1000.0
+                for s in ev.get("segs", []):
+                    w_text = s.get("utf8", "").strip()
+                    if not w_text or w_text == "\n":
+                        continue
+                    offset = s.get("tOffsetMs", 0) / 1000.0
+                    w_s = t_start + offset
+                    w_e = min(w_s + 0.35, t_start + dur)
+                    words.append({"w": w_text, "s": round(w_s, 2), "e": round(w_e, 2)})
+        else:
+            lines = content.splitlines()
+            time_re = re.compile(r"(\d{2}:\d{2}:\d{2}[\.,]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[\.,]\d{3})")
+            for i, line in enumerate(lines):
+                m = time_re.search(line)
+                if m and i + 1 < len(lines):
+                    s_str, e_str = m.groups()
+                    def to_sec(t_str):
+                        p = t_str.replace(",", ".").split(":")
+                        return float(p[0]) * 3600 + float(p[1]) * 60 + float(p[2])
+                    t0 = to_sec(s_str)
+                    t1 = to_sec(e_str)
+                    text_line = lines[i + 1].strip()
+                    text_clean = re.sub(r"<[^>]+>", "", text_line)
+                    w_list = text_clean.split()
+                    if w_list:
+                        dur_per_word = max(0.1, (t1 - t0) / len(w_list))
+                        for w_i, word in enumerate(w_list):
+                            w_s = t0 + w_i * dur_per_word
+                            words.append({"w": word, "s": round(w_s, 2), "e": round(w_s + dur_per_word, 2)})
+
+        if len(words) >= 5:
+            return {"language": "en", "words": words}
+    except Exception as e:
+        print(f"[clipforge] Could not parse cloud transcript: {e}")
+    return None
+
+
+def download_clip_slice(
+    url: str,
+    start: float,
+    duration: float,
+    out_path: Path,
+    max_height: int = 1080,
+    cookies_browser: str = "",
+    cookies_file: str = "",
+) -> Path:
+    """Download ONLY a short clip slice (HTTP Range request) instead of the whole video."""
+    import yt_dlp
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    pad_start = max(0.0, float(start) - 0.5)
+    clean_dur = max(1.0, float(duration))
+    pad_end = max(pad_start + 1.0, pad_start + clean_dur + 1.0)
+
+    def section_filter(info_dict, ydl):
+        return [{"start_time": pad_start, "end_time": pad_end}]
+
+    vfmt = f"bv*[height<={max_height}]+ba/b[height<={max_height}]/best"
+    tmpl = str(out_path.with_suffix(".%(ext)s"))
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "noplaylist": True,
+        "format": vfmt,
+        "outtmpl": tmpl,
+        "download_ranges": section_filter,
+        "force_keyframes_at_cuts": True,
+        "merge_output_format": "mp4",
+        "remote_components": ["ejs:github"],
+    }
+    if not shutil.which("ffmpeg"):
+        opts["ffmpeg_location"] = ffmpeg_bin()
+    _apply_cookie_opts(opts, cookies_file, cookies_browser)
+
+    with yt_dlp.YoutubeDL(opts) as y:
+        y.download([url])
+
+    if out_path.exists():
+        return out_path
+    for ext in (".mp4", ".mkv", ".webm", ".mov"):
+        cand = out_path.with_suffix(ext)
+        if cand.exists():
+            if cand != out_path:
+                cand.rename(out_path)
+            return out_path
+    raise RuntimeError(f"Could not download clip slice for range {start:.1f}s - {start + duration:.1f}s")
 
 
 # ----------------------------------------------------------------------------- full pipeline
@@ -711,6 +973,126 @@ def run_pipeline(job_dir: Path, opts: dict, report, source: Path | None = None, 
         raise RuntimeError("Your ffmpeg build has no subtitle renderer (libass). Install a full ffmpeg build.")
     stage = lambda name, lo, hi: (lambda msg, f=None: report(msg, None if f is None else lo + (hi - lo) * f, name))
     if source is None:
+        # ⚡ Fast Online Mode: check for instant YouTube cloud captions without downloading video
+        if opts.get("fast_stream", True) and ("youtube.com" in url or "youtu.be" in url):
+            report("⚡ Checking for instant online captions (zero-download mode)...", 0.05, "transcribe")
+            import yt_dlp
+            js = find_js_runtimes()
+            base = {
+                "quiet": True,
+                "no_warnings": True,
+                "noplaylist": True,
+                "skip_download": True,
+                "remote_components": ["ejs:github"],
+                "js_runtimes": js,
+            }
+            _apply_cookie_opts(base, opts.get("cookies_file", ""), opts.get("cookies_browser", ""))
+            try:
+                with yt_dlp.YoutubeDL(base) as y:
+                    info = y.extract_info(url, download=False)
+                    title = info.get("title") or "video"
+                    dur_total = float(info.get("duration") or 0)
+                    tr = extract_cloud_transcript(info, ydl=y)
+                    if tr and len(tr.get("words", [])) >= 15:
+                        vinfo = {
+                            "width": info.get("width") or 1920,
+                            "height": info.get("height") or 1080,
+                            "duration": dur_total,
+                            "has_audio": True,
+                            "title": title,
+                            "source": "online_stream",
+                            "stream_url": url,
+                            "is_stream_slice": True,
+                        }
+                        tj = job_dir / "transcript.json"
+                        tj.write_text(json.dumps(tr), encoding="utf-8")
+                        report("⚡ Found online captions! Finding viral clips in 2 seconds...", 0.3, "analyze")
+                        clips, notes = find_clips(tr["words"], dur_total, [], opts, stage("analyze", 0.3, 0.75))
+                        for n, c in enumerate(clips, 1):
+                            c["n"] = n
+                            c["duration"] = round(c["end"] - c["start"], 1)
+                            c["start"], c["end"] = round(c["start"], 2), round(c["end"], 2)
+                            c["text"] = c["text"][:1500]
+                        return {
+                            "video": vinfo,
+                            "clips": clips,
+                            "notes": notes + ["⚡ Fast Online Mode: Generated from cloud captions without full download!"],
+                            "language": tr.get("language", "en"),
+                            "is_stream_slice": True,
+                        }
+                    else:
+                        report("⚡ Zero-download mode: Streaming audio track for instant transcription...", 0.1, "transcribe")
+                        wav = job_dir / "audio.wav"
+                        raw_audio = job_dir / "stream_audio"
+
+                        target_sec = min(int(opts.get("live_minutes", 10)) * 60, dur_total) if dur_total > 1200 else dur_total
+                        max_audio_bytes = int(target_sec * 20_000) if (target_sec and target_sec < dur_total) else None
+
+                        class StopDownload(Exception):
+                            pass
+
+                        def chunk_hook(d):
+                            if max_audio_bytes and d.get("status") == "downloading":
+                                if d.get("downloaded_bytes", 0) >= max_audio_bytes:
+                                    raise StopDownload()
+
+                        js = find_js_runtimes()
+                        audio_opts = {
+                            "quiet": True,
+                            "no_warnings": True,
+                            "noplaylist": True,
+                            "format": "ba/b[height<=480]",
+                            "outtmpl": str(raw_audio) + ".%(ext)s",
+                            "progress_hooks": [chunk_hook],
+                            "remote_components": ["ejs:github"],
+                            "js_runtimes": js,
+                        }
+                        _apply_cookie_opts(audio_opts, opts.get("cookies_file", ""), opts.get("cookies_browser", ""))
+
+                        try:
+                            with yt_dlp.YoutubeDL(audio_opts) as ay:
+                                ay.download([url])
+                        except (StopDownload, Exception) as e:
+                            pass
+
+                        audio_files = list(job_dir.glob("stream_audio.*"))
+                        if audio_files:
+                            extract_audio(audio_files[0], wav)
+                            audio_files[0].unlink(missing_ok=True)
+
+                            report("⚡ Audio streamed! Finding viral moments with AI...", 0.25, "transcribe")
+                            eff_dur = target_sec if (target_sec and target_sec < dur_total) else dur_total
+                            tr = transcribe(wav, opts.get("whisper_model", "base"), opts.get("language") or None, eff_dur, stage("transcribe", 0.25, 0.6))
+                            (job_dir / "transcript.json").write_text(json.dumps(tr), encoding="utf-8")
+
+                            energy = energy_per_second(wav) if wav.exists() else []
+                            clips, notes = find_clips(tr["words"], eff_dur, energy, opts, stage("analyze", 0.6, 0.75))
+                            for n, c in enumerate(clips, 1):
+                                c["n"] = n
+                                c["duration"] = round(c["end"] - c["start"], 1)
+                                c["start"], c["end"] = round(c["start"], 2), round(c["end"], 2)
+                                c["text"] = c["text"][:1500]
+
+                            vinfo = {
+                                "width": info.get("width") or 1920,
+                                "height": info.get("height") or 1080,
+                                "duration": dur_total,
+                                "has_audio": True,
+                                "title": title,
+                                "source": "online_stream",
+                                "stream_url": url,
+                                "is_stream_slice": True,
+                            }
+                            return {
+                                "video": vinfo,
+                                "clips": clips,
+                                "notes": notes + ["⚡ Fast Online Mode: Streamed audio directly without downloading the full video!"],
+                                "language": tr.get("language", "en"),
+                                "is_stream_slice": True,
+                            }
+            except Exception as e:
+                print(f"[clipforge] Fast stream mode skipped ({e}), falling back to standard download...")
+
         source, title = download(url, job_dir, int(opts.get("live_minutes", 10)), stage("download", 0.0, 0.2),
                                  int(opts.get("source_height", 1080)), opts.get("cookies_browser", ""),
                                  opts.get("cookies_file", ""))

@@ -76,9 +76,9 @@ video{width:100%;aspect-ratio:9/16;background:#000;border-radius:6px;display:blo
   <h1>ClipForge</h1>
   <p class="sub">Turn any long video or live stream into vertical clips most likely to take off.</p>
   <form id="f">
-    <label>Video link
-      <input type="text" name="url" id="url" placeholder="https://youtu.be/... or a file path" autocomplete="off">
-      <small>YouTube, Twitch, Kick, Vimeo, X and most other sites. Live streams are recorded first.</small>
+    <label>Video link(s)
+      <textarea name="url" id="url" rows="2" placeholder="Paste 1 link or multiple links (one per line)&#10;https://youtu.be/...&#10;https://youtu.be/..." style="width:100%;resize:vertical;font-family:inherit;padding:8px 10px;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--text);font-size:13px" autocomplete="off"></textarea>
+      <small>Supports YouTube, Twitch, Kick & live streams. Paste multiple links to queue them automatically.</small>
     </label>
     <label>Or upload a file
       <input type="file" name="file" accept="video/*,audio/*">
@@ -87,7 +87,8 @@ video{width:100%;aspect-ratio:9/16;background:#000;border-radius:6px;display:blo
       <label>Number of clips <input type="number" name="num_clips" value="5" min="1" max="20"></label>
       <label>Layout
         <select name="layout">
-          <option value="fit" selected>Fit, blurred background (keeps webcam & full frame)</option>
+          <option value="split" selected>Split screen (Webcam top, Gameplay bottom) ⭐ Best for Gaming</option>
+          <option value="fit">Fit, blurred background (keeps full frame)</option>
           <option value="fill">Fill, follow the speaker (zooms in on face)</option>
         </select>
       </label>
@@ -96,8 +97,23 @@ video{width:100%;aspect-ratio:9/16;background:#000;border-radius:6px;display:blo
       <label>Shortest clip (s) <input type="number" name="min_len" value="20" min="5" max="120"></label>
       <label>Longest clip (s) <input type="number" name="max_len" value="60" min="10" max="180"></label>
     </div>
+    <label>Language & Subtitles
+      <select name="language" style="font-weight:600">
+        <option value="" selected>🌐 Auto-Detect Language</option>
+        <option value="hi_en">🇮🇳 Hindi / Hinglish ➔ Translate to English Subtitles (Best for Indian Gaming & Vlogs)</option>
+        <option value="en">🇺🇸 English (Accurate English speech)</option>
+        <option value="hi">🇮🇳 Hindi (Original Hindi Devanagari)</option>
+        <option value="es">🇪🇸 Spanish</option>
+        <option value="fr">🇫🇷 French</option>
+        <option value="de">🇩🇪 German</option>
+        <option value="ja">🇯🇵 Japanese</option>
+      </select>
+      <small style="color:var(--mute)">For Indian streams (Mythpat, Total Gaming, etc.), select <b>Hindi / Hinglish ➔ Translate to English</b> for 100% accurate, professional English captions!</small>
+    </label>
+    <label class="check" style="font-weight:700;color:var(--text)"><input type="checkbox" name="fast_stream" value="true" checked> ⚡ Fast Online Mode (Instant stream processing without downloading full video)</label>
     <label class="check"><input type="checkbox" name="captions" value="true" checked> Burned-in captions with word highlight</label>
     <label class="check"><input type="checkbox" name="hook" value="true" checked> Title at the start of each clip</label>
+    <label class="check"><input type="checkbox" name="cta" value="true" checked> Add animated "Like & Subscribe" popup (keys out green screen with bell sound)</label>
 
     <div style="margin:12px 0;padding:12px;background:rgba(255,0,0,0.06);border:1px solid rgba(255,0,0,0.2);border-radius:8px">
       <label class="check" style="font-weight:700;color:var(--text);margin-bottom:6px">
@@ -114,15 +130,40 @@ video{width:100%;aspect-ratio:9/16;background:#000;border-radius:6px;display:blo
           </label>
           <label>Schedule interval
             <select name="youtube_schedule">
-              <option value="instant" selected>All at once</option>
+              <option value="interval_4h" selected>1 clip every 4 hours (Auto-chained)</option>
               <option value="interval_2h">1 clip every 2 hours</option>
-              <option value="interval_4h">1 clip every 4 hours</option>
               <option value="interval_6h">1 clip every 6 hours</option>
+              <option value="interval_8h">1 clip every 8 hours (3/day)</option>
+              <option value="interval_12h">1 clip every 12 hours (2/day)</option>
               <option value="daily">1 clip per day</option>
+              <option value="instant">All at once</option>
             </select>
           </label>
         </div>
-        <small style="color:var(--mute)">AI automatically writes viral title, #Shorts hook, tags & description.</small>
+        <small style="color:var(--ok);font-size:11.5px;display:block;margin-top:2px">🔗 <b>Collision-Free Auto-Chaining:</b> New clips automatically schedule after previous clips so 4–5 videos never clash!</small>
+      </div>
+    </div>
+
+    <div style="margin:12px 0;padding:12px;background:rgba(225,48,108,0.06);border:1px solid rgba(225,48,108,0.25);border-radius:8px">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <label class="check" style="font-weight:700;color:var(--text)">
+          <input type="checkbox" name="auto_publish_instagram" value="true"> 📸 Auto-Publish to Instagram Reels
+        </label>
+        <label class="check" style="font-weight:700;color:var(--text)">
+          <input type="checkbox" name="auto_publish_facebook" value="true"> 📘 Auto-Publish to Facebook Reels
+        </label>
+      </div>
+      <div style="margin-top:8px;font-size:12.5px;display:flex;flex-direction:column;gap:8px">
+        <label>Reels Schedule interval
+          <select name="meta_schedule">
+            <option value="instant" selected>Instant (All at once)</option>
+            <option value="interval_2h">1 Reel every 2 hours</option>
+            <option value="interval_4h">1 Reel every 4 hours</option>
+            <option value="interval_6h">1 Reel every 6 hours</option>
+            <option value="daily">1 Reel per day</option>
+          </select>
+        </label>
+        <small style="color:var(--mute);font-size:11.5px">⚡ Generates viral hooks, engagement prompts & high-converting hashtags (#reels, #gaming, #fyp) automatically.</small>
       </div>
     </div>
     <details>
@@ -139,9 +180,6 @@ video{width:100%;aspect-ratio:9/16;background:#000;border-radius:6px;display:blo
             <option value="medium">medium, slow on CPU</option>
             <option value="large-v3">large-v3, best, needs a GPU</option>
           </select>
-        </label>
-        <label>Spoken language <small>Leave empty to detect it</small>
-          <input type="text" name="language" placeholder="en, hi, es ...">
         </label>
         <label>Caption highlight colour
           <select name="caption_color">
@@ -174,8 +212,8 @@ video{width:100%;aspect-ratio:9/16;background:#000;border-radius:6px;display:blo
         </label>
         <label>Clip qualities to export
           <span class="check"><input type="checkbox" class="qual" value="480p"> 480p</span>
-          <span class="check"><input type="checkbox" class="qual" value="720p" checked> 720p</span>
-          <span class="check"><input type="checkbox" class="qual" value="1080p" checked> 1080p</span>
+          <span class="check"><input type="checkbox" class="qual" value="720p" checked> 720p (Recommended: fast rendering)</span>
+          <span class="check"><input type="checkbox" class="qual" value="1080p"> 1080p</span>
         </label>
         <label class="check"><input type="checkbox" name="delete_source" checked> Delete the source video when finished</label>
         <label>Save clips to <small>A folder (Google Drive for Desktop, external disk) or an rclone remote like gdrive:ClipForge</small>
@@ -197,6 +235,13 @@ video{width:100%;aspect-ratio:9/16;background:#000;border-radius:6px;display:blo
     <div id="ytStatus" style="font-size:13px;color:var(--mute)">Checking channel...</div>
   </div>
 
+  <div id="metaPanel" style="margin-top:14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:6px;display:flex;align-items:center;gap:6px">
+      <span>📸 Instagram & 📘 Facebook Reels</span>
+    </div>
+    <div id="metaStatus" style="font-size:13px;color:var(--mute)">Checking status...</div>
+  </div>
+
   <div id="drivePanel" style="margin-top:14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px">
     <div style="font-weight:700;font-size:13.5px;margin-bottom:6px;display:flex;align-items:center;gap:6px">
       <span>☁️ Google Drive Sync</span>
@@ -213,6 +258,13 @@ video{width:100%;aspect-ratio:9/16;background:#000;border-radius:6px;display:blo
   </div>
 </aside>
 <main>
+  <div id="queueSection" style="display:none;margin-bottom:18px;padding:14px 16px;background:var(--panel);border:1px solid var(--accent);border-radius:10px">
+    <div style="font-weight:700;font-size:13.5px;color:var(--accent);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+      <span>⚡ Processing Queue</span>
+      <span id="queueCount" style="font-size:12px;color:var(--mute)"></span>
+    </div>
+    <div id="queueList" style="display:flex;flex-direction:column;gap:8px"></div>
+  </div>
   <div id="warn"></div>
   <div id="view"><p class="empty">Paste a link, choose how many clips you want, and start. Clips appear here as soon as they are ready.</p></div>
   <section class="hist" id="hist"></section>
@@ -230,20 +282,26 @@ $("#f").addEventListener("submit", async e => {
   e.preventDefault();
   $("#ferr").textContent = ""; $("#go").disabled = true;
   const fd = new FormData(e.target);
-  for (const k of ["captions","hook","uppercase","delete_source","remove_local","auto_publish_youtube"]) if (e.target.elements[k]) fd.set(k, e.target.elements[k].checked ? "true" : "false");
+  for (const k of ["captions","hook","uppercase","delete_source","remove_local","auto_publish_youtube","auto_publish_instagram","auto_publish_facebook","cta","fast_stream"]) if (e.target.elements[k]) fd.set(k, e.target.elements[k].checked ? "true" : "false");
   const qs = [...document.querySelectorAll(".qual:checked")].map(x => x.value);
   fd.set("qualities", qs.length ? qs.join(",") : "720p");
   if (!fd.get("file").name) fd.delete("file");
   try {
     const r = await fetch("/api/jobs", {method:"POST", body: fd});
-    const j = await r.json();
-    if (!r.ok) throw new Error(typeof j.detail === "string" ? j.detail : "Check the form values and try again.");
+    let j = null;
+    try {
+      j = await r.json();
+    } catch(err) {
+      const txt = await r.text().catch(() => "");
+      throw new Error(txt || `Server response error (${r.status}). Please try again.`);
+    }
+    if (!r.ok) throw new Error(typeof j?.detail === "string" ? j.detail : (j?.error || "Check the form values and try again."));
     openJob(j.id);
   } catch (x) { $("#ferr").textContent = x.message; }
   $("#go").disabled = false;
 });
 
-function openJob(id){ cur = id; clearInterval(timer); poll(); timer = setInterval(poll, 1500); }
+function openJob(id){ cur = id; clearInterval(timer); drawnClips = ""; poll(); timer = setInterval(poll, 1500); syncYouTube(id); }
 
 async function poll(){
   if (!cur) return;
@@ -279,17 +337,25 @@ function draw(j){
   h += `<div style="display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:14px;padding-top:10px;border-top:1px solid var(--line);font-size:12px;color:var(--mute)">
     <span>✂️ Target: <b>${opts.num_clips || 5} clips</b></span>
     <span>⏱️ Length: <b>${opts.min_len || 20}s – ${opts.max_len || 60}s</b></span>
-    <span>📐 Layout: <b>${opts.layout === "fit" ? "Fit (webcam safe)" : "Fill (speaker zoom)"}</b></span>
+    <span>📐 Layout: <b>${opts.layout === "split" ? "Split (Cam top / Game bottom)" : (opts.layout === "fit" ? "Fit (webcam safe)" : "Fill (speaker zoom)")}</b></span>
     <span>💬 Captions: <b>${opts.captions !== false ? "On" : "Off"}</b></span>
     <span>🎯 Title: <b>${opts.hook !== false ? "On" : "Off"}</b></span>
     <span>☁️ Drive: <b>${j.drive_uploaded ? "Saved ✅" : (opts.save_to ? esc(opts.save_to) : "Auto-sync")}</b></span>
     <span>▶️ Shorts: <b>${opts.auto_publish_youtube ? (opts.youtube_schedule || "Instant") : "Manual"}</b></span>
+    <span>📸 IG: <b>${opts.auto_publish_instagram ? "Auto" : "Manual"}</b></span>
+    <span>📘 FB: <b>${opts.auto_publish_facebook ? "Auto" : "Manual"}</b></span>
   </div>`;
 
   if (j.status === "error" && j.can_retry) h += `<p><button class="go" style="padding:9px 16px" onclick="retryJob('${j.id}')">Retry from where it stopped</button></p>`;
-  if (j.status === "done" || j.status === "error" || j.status === "cancelled") h += `<div style="margin-top:8px"><button class="del" onclick="delJob('${j.id}')">Delete project files (${j.size_mb||0} MB)</button></div>`;
+  if (j.status === "done" || j.status === "error" || j.status === "cancelled") {
+    h += `<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+      <button class="del" onclick="delJob('${j.id}')">Delete project files (${j.size_mb||0} MB)</button>
+      <button onclick="syncYouTube('${j.id}',this)" style="background:none;border:1px solid var(--line);color:var(--mute);border-radius:5px;padding:6px 10px;font-size:12px;cursor:pointer">🔄 Verify YouTube Status</button>
+      ${j.clips && j.clips.some(c => !c.youtube_url) ? `<button onclick="batchSchedule('${j.id}',this)" style="background:#cc0000;color:#fff;border:0;border-radius:5px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer">📅 Auto-Schedule Remaining Clips (every 2h)</button>` : ''}
+    </div>`;
+  }
   h += `</div>`;
-  const key = j.status + "|" + (j.clips||[]).length;
+  const key = j.status + "|" + (j.clips||[]).map(c => `${c.n}:${c.youtube_status||''}:${c.youtube_url||''}:${c.instagram_url||''}:${c.facebook_url||''}:${(c.youtube_metadata||{}).title||''}`).join("|");
   if (j.status === "done") {
     if (key === drawnClips && v.dataset.job === j.id) return;
     drawnClips = key;
@@ -335,15 +401,40 @@ function clipHTML(j, c){
       <div class="dl" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
         <select id="q${c.n}">${["1080p","720p","480p"].filter(q => av.includes(q)).map(q => `<option value="${q}" ${q===pq?"selected":""}>${q}</option>`).join("")}</select>
         <button onclick="dl('${j.id}',${c.n},this)">Download MP4</button>
-        ${c.youtube_url ?
-          `<a href="${c.youtube_url}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;color:#fff;background:#cc0000;padding:7px 12px;border-radius:6px;font-size:12.5px;font-weight:700;text-decoration:none">▶️ ${c.youtube_status==='scheduled'?'Shorts (Scheduled ⏰)':'Shorts (Live ✅)'}</a>` :
-          `<button onclick="publishShort('${j.id}',${c.n},this)" style="background:#cc0000;color:#fff;border:0;border-radius:6px;padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer">▶️ Publish to Shorts</button>`
+        ${c.youtube_status === 'deleted' ?
+          `<span style="display:inline-flex;align-items:center;gap:4px;color:#f44336;background:rgba(244,67,54,0.12);padding:6px 10px;border-radius:6px;font-size:12px;font-weight:600">🗑️ Deleted on YouTube</span>
+           <button onclick="publishShort('${j.id}',${c.n},this)" style="background:#cc0000;color:#fff;border:0;border-radius:6px;padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer">▶️ Re-publish to Shorts</button>` :
+          (c.youtube_url ?
+            `<a href="${c.youtube_url}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;color:#fff;background:#cc0000;padding:7px 12px;border-radius:6px;font-size:12.5px;font-weight:700;text-decoration:none">▶️ ${c.youtube_status==='scheduled'?'Shorts (Scheduled ⏰)':'Shorts (Live ✅)'}</a>
+             ${c.youtube_scheduled ? `<span style="font-size:12px;color:#ff9800;font-weight:600;display:inline-flex;align-items:center;gap:4px">📅 Drops: ${new Date(c.youtube_scheduled).toLocaleString([], {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})}</span>` : ''}
+             <button onclick="deleteShort('${j.id}',${c.n},this)" style="background:none;border:1px solid #f44336;color:#f44336;border-radius:6px;padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer" title="Cancel this scheduled drop and delete it from YouTube">🗑️ Cancel & Remove</button>` :
+            `<button onclick="publishShort('${j.id}',${c.n},this)" style="background:#cc0000;color:#fff;border:0;border-radius:6px;padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer">▶️ Publish to Shorts</button>`
+          )
+        }
+        ${c.instagram_url ?
+          `<a href="${c.instagram_url}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;color:#fff;background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);padding:7px 12px;border-radius:6px;font-size:12.5px;font-weight:700;text-decoration:none">📸 IG Reel (Live ✅)</a>` :
+          `<button onclick="publishInstagram('${j.id}',${c.n},this)" style="background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);color:#fff;border:0;border-radius:6px;padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer">📸 Publish to IG Reel</button>`
+        }
+        ${c.facebook_url ?
+          `<a href="${c.facebook_url}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;color:#fff;background:#1877f2;padding:7px 12px;border-radius:6px;font-size:12.5px;font-weight:700;text-decoration:none">📘 ${c.facebook_status==='scheduled'?'FB Reel (Scheduled ⏰)':'FB Reel (Live ✅)'}</a>` :
+          `<button onclick="publishFacebook('${j.id}',${c.n},this)" style="background:#1877f2;color:#fff;border:0;border-radius:6px;padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer">📘 Publish to FB Reel</button>`
         }
       </div>
-      ${c.youtube_metadata ? `<div style="margin-top:10px;padding:8px 12px;background:rgba(255,0,0,0.06);border:1px solid rgba(255,0,0,0.15);border-radius:6px;font-size:12px">
-        <div style="font-weight:700;color:#e53935;margin-bottom:3px">SEO Title: ${esc(c.youtube_metadata.title)}</div>
-        <div style="color:var(--mute);margin-bottom:3px">${esc((c.youtube_metadata.description||"").slice(0, 120))}...</div>
-        <div style="color:var(--accent);font-size:11px">${(c.youtube_metadata.hashtags||[]).join(" ")}</div>
+      ${c.youtube_metadata ? `<div style="margin-top:10px;padding:10px 12px;background:rgba(255,0,0,0.06);border:1px solid rgba(255,0,0,0.18);border-radius:8px;font-size:12px">
+        <div style="font-weight:700;color:#e53935;font-size:13px;margin-bottom:6px">📌 YouTube Title: ${esc(c.youtube_metadata.title)}</div>
+        <details style="margin-bottom:6px">
+          <summary style="cursor:pointer;color:var(--text);font-weight:600">📝 View YouTube Description</summary>
+          <pre style="white-space:pre-wrap;font-family:inherit;font-size:11.5px;color:var(--mute);margin-top:6px;padding:8px;background:rgba(0,0,0,0.25);border-radius:6px">${esc(c.youtube_metadata.description)}</pre>
+        </details>
+        <div style="color:var(--accent);font-size:11.5px;margin-bottom:4px">${(c.youtube_metadata.hashtags||[]).join(" ")}</div>
+        <div style="font-size:11px;color:var(--mute)">🏷️ <b>${(c.youtube_metadata.tags||[]).length} Tags (${(c.youtube_metadata.tags||[]).reduce((a,b)=>a+b.length+1,0)} chars):</b> ${(c.youtube_metadata.tags||[]).slice(0, 15).join(", ")}...</div>
+      </div>` : ""}
+      ${c.instagram_metadata || c.facebook_metadata ? `<div style="margin-top:10px;padding:10px 12px;background:rgba(225,48,108,0.06);border:1px solid rgba(225,48,108,0.2);border-radius:8px;font-size:12px">
+        <div style="font-weight:700;color:#e1306c;font-size:13px;margin-bottom:6px">📸 📘 Reels Caption & Viral Tags</div>
+        <details>
+          <summary style="cursor:pointer;color:var(--text);font-weight:600">📝 View Reels Caption</summary>
+          <pre style="white-space:pre-wrap;font-family:inherit;font-size:11.5px;color:var(--mute);margin-top:6px;padding:8px;background:rgba(0,0,0,0.25);border-radius:6px">${esc((c.instagram_metadata || c.facebook_metadata).caption)}</pre>
+        </details>
       </div>` : ""}
     </div></article>`;
 }
@@ -366,8 +457,11 @@ async function dl(id, n, btn){
 async function loadHist(){
   const r = await fetch("/api/jobs"); if (!r.ok) return;
   const L = await r.json();
-  $("#hist").innerHTML = L.length ? "<h2>Earlier projects</h2>" + L.map(x =>
-    `<button class="h" onclick="openJob('${x.id}')"><span>${esc(x.title)}</span><span class="st">${x.status === "done" ? x.clips+" clips" : x.status}</span></button>`).join("") : "";
+  $("#hist").innerHTML = L.length ? "<h2>Earlier projects</h2>" + L.map(x => {
+    const stLabel = x.status === "done" ? `${x.clips} clips` : (x.status === "running" ? "⚡ Running" : (x.status === "queued" ? "⏳ In Queue" : x.status));
+    const stColor = x.status === "running" ? "color:#00e676" : (x.status === "error" ? "color:var(--bad)" : "");
+    return `<button class="h" onclick="openJob('${x.id}')"><span>${esc(x.title)}</span><span class="st" style="${stColor}">${stLabel}</span></button>`;
+  }).join("") : "";
 }
 loadHist();
 fetch("/api/destinations").then(r => r.json()).then(L => {
@@ -497,15 +591,29 @@ async function disconnectYouTube() {
   loadYouTube();
 }
 
+async function safeFetchJSON(url, opts) {
+  const r = await fetch(url, opts);
+  let d = null;
+  try {
+    d = await r.json();
+  } catch(e) {
+    const txt = await r.text().catch(() => "");
+    throw new Error(txt || `Server error (${r.status})`);
+  }
+  if (!r.ok) {
+    const msg = typeof d?.detail === "string" ? d.detail : (d?.message || d?.error || `Request failed (${r.status})`);
+    throw new Error(msg);
+  }
+  return d;
+}
+
 async function publishShort(jid, n, btn) {
   const old = btn.textContent;
   btn.disabled = true;
   btn.textContent = "Publishing...";
   try {
     const fd = new FormData();
-    const r = await fetch(`/api/jobs/${jid}/clips/${n}/publish-youtube`, {method: "POST", body: fd});
-    const res = await r.json();
-    if (!r.ok) throw new Error(res.detail || "Upload failed");
+    const res = await safeFetchJSON(`/api/jobs/${jid}/clips/${n}/publish-youtube`, {method: "POST", body: fd});
     btn.textContent = "Published ✅";
     poll();
   } catch (err) {
@@ -515,9 +623,203 @@ async function publishShort(jid, n, btn) {
   }
 }
 
+async function batchSchedule(jid, btn) {
+  const old = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Scheduling on YouTube...";
+  try {
+    const fd = new FormData();
+    fd.set("interval_hours", "2");
+    const d = await safeFetchJSON(`/api/jobs/${jid}/batch-schedule`, {method: "POST", body: fd});
+    alert(`Successfully scheduled ${d.scheduled_count} clips on YouTube!`);
+    drawnClips = "";
+    poll();
+  } catch (err) {
+    alert(err.message);
+    btn.textContent = old;
+    btn.disabled = false;
+  }
+}
+
+async function syncYouTube(jid, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = "Checking YouTube..."; }
+  try {
+    const d = await safeFetchJSON(`/api/jobs/${jid}/sync-youtube`, {method: "POST"});
+    drawnClips = "";
+    poll();
+  } catch(e) {}
+  if (btn) { btn.disabled = false; btn.textContent = "🔄 Verify YouTube Status"; }
+}
+
+async function deleteShort(jid, n, btn) {
+  if (!confirm("Are you sure you want to cancel and delete this Short from YouTube?")) return;
+  const old = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Deleting from YT...";
+  try {
+    const res = await safeFetchJSON(`/api/jobs/${jid}/clips/${n}/delete-youtube`, {method: "POST"});
+    alert("Short successfully deleted from YouTube schedule.");
+    drawnClips = "";
+    poll();
+  } catch (err) {
+    alert(err.message);
+    btn.textContent = old;
+    btn.disabled = false;
+  }
+}
+
+// Meta (Instagram & Facebook) Publisher
+async function loadMeta() {
+  try {
+    const r = await fetch("/api/meta/status");
+    const d = await r.json();
+    const el = $("#metaStatus");
+    if (!el) return;
+    if (d.connected) {
+      const ig = d.instagram || {};
+      const fb = d.facebook || {};
+      let html = `<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">`;
+      if (ig.id) {
+        html += `<div style="display:flex;align-items:center;gap:6px;font-size:12.5px">
+          ${ig.profile_pic ? `<img src="${ig.profile_pic}" style="width:22px;height:22px;border-radius:50%">` : '<span>📸</span>'}
+          <span style="color:var(--ok);font-weight:600">IG:</span> <b>@${esc(ig.username)}</b>
+        </div>`;
+      }
+      if (fb.id) {
+        html += `<div style="display:flex;align-items:center;gap:6px;font-size:12.5px">
+          <span>📘</span> <span style="color:var(--ok);font-weight:600">FB Page:</span> <b>${esc(fb.name)}</b>
+        </div>`;
+      }
+      html += `</div>
+        <button onclick="disconnectMeta()" style="background:none;border:1px solid var(--bad);color:var(--bad);border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer">Disconnect Meta</button>`;
+      el.innerHTML = html;
+    } else {
+      el.innerHTML = `
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <button onclick="connectMeta()" style="background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);color:#fff;border:0;border-radius:6px;padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer;width:100%">Connect Meta (IG & FB)</button>
+          <details style="border-top:none;padding-top:2px;font-size:12px">
+            <summary style="cursor:pointer;color:var(--accent);font-size:11.5px">Or Enter Token Directly</summary>
+            <div style="margin-top:6px;display:flex;flex-direction:column;gap:6px">
+              <input type="password" id="metaTokenInput" placeholder="EAAB... (Graph API / Page Token)" style="padding:6px 8px;font-size:11.5px">
+              <button onclick="connectMetaWithToken()" style="background:var(--accent);color:#fff;border:0;border-radius:4px;padding:5px 8px;font-size:11.5px;font-weight:600;cursor:pointer">Save & Connect</button>
+            </div>
+          </details>
+          <small style="color:var(--mute);font-size:11px">Auto-publishes viral vertical reels with hashtags & hooks</small>
+        </div>
+      `;
+    }
+  } catch(e) {}
+}
+
+async function connectMeta() {
+  const r = await fetch("/api/meta/auth");
+  const d = await r.json();
+  if (d.url) {
+    window.open(d.url, "_blank");
+    const check = setInterval(async () => {
+      const res = await fetch("/api/meta/status");
+      const st = await res.json();
+      if (st.connected) { clearInterval(check); loadMeta(); }
+    }, 2000);
+    setTimeout(() => clearInterval(check), 60000);
+  } else {
+    alert(d.detail || "Meta App credentials required. Set META_APP_ID / META_APP_SECRET in .env or enter an Access Token directly.");
+  }
+}
+
+async function connectMetaWithToken() {
+  const inp = $("#metaTokenInput");
+  const tok = inp ? inp.value.trim() : "";
+  if (!tok) { alert("Please paste a Meta access token."); return; }
+  try {
+    const fd = new FormData();
+    fd.set("token", tok);
+    const res = await safeFetchJSON("/api/meta/connect-token", {method: "POST", body: fd});
+    alert("Connected successfully to Meta!");
+    loadMeta();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+async function disconnectMeta() {
+  if (!confirm("Disconnect Meta (Instagram & Facebook)?")) return;
+  await fetch("/api/meta/disconnect", {method: "POST"});
+  loadMeta();
+}
+
+async function publishInstagram(jid, n, btn) {
+  const old = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Publishing to IG...";
+  try {
+    const fd = new FormData();
+    const res = await safeFetchJSON(`/api/jobs/${jid}/clips/${n}/publish-instagram`, {method: "POST", body: fd});
+    btn.textContent = "Published ✅";
+    drawnClips = "";
+    poll();
+  } catch (err) {
+    alert(err.message);
+    btn.textContent = old;
+    btn.disabled = false;
+  }
+}
+
+async function publishFacebook(jid, n, btn) {
+  const old = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Publishing to FB...";
+  try {
+    const fd = new FormData();
+    const res = await safeFetchJSON(`/api/jobs/${jid}/clips/${n}/publish-facebook`, {method: "POST", body: fd});
+    btn.textContent = "Published ✅";
+    drawnClips = "";
+    poll();
+  } catch (err) {
+    alert(err.message);
+    btn.textContent = old;
+    btn.disabled = false;
+  }
+}
+
+async function loadQueue() {
+  try {
+    const r = await fetch("/api/queue");
+    if (!r.ok) return;
+    const d = await r.json();
+    const el = $("#queueSection");
+    const qList = $("#queueList");
+    if (!d.queue || d.queue.length === 0) {
+      el.style.display = "none";
+      return;
+    }
+    el.style.display = "block";
+    $("#queueCount").textContent = `${d.queue.length} project(s) waiting`;
+    qList.innerHTML = d.queue.map((item, idx) => `
+      <div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg);padding:8px 12px;border-radius:6px;font-size:13px">
+        <div>
+          <b>#${idx + 1}:</b> <span style="font-weight:600">${esc(item.title)}</span>
+          <span style="color:var(--mute);font-size:11.5px;margin-left:6px">⏳ Queued</span>
+        </div>
+        <button onclick="removeFromQueue('${item.id}')" style="background:none;border:1px solid var(--bad);color:var(--bad);border-radius:4px;padding:3px 8px;font-size:11.5px;font-weight:600;cursor:pointer">✕ Remove</button>
+      </div>
+    `).join("");
+  } catch(e) {}
+}
+
+async function removeFromQueue(jid) {
+  if (!confirm("Remove this project from the processing queue?")) return;
+  await fetch(`/api/queue/${jid}/remove`, {method: "POST"});
+  loadQueue();
+  loadHist();
+}
+
 loadYouTube();
+loadMeta();
 loadDrive();
 loadStorage();
+loadQueue();
+setInterval(loadQueue, 3000);
 </script>
 </body>
 </html>
