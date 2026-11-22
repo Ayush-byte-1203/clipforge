@@ -31,10 +31,12 @@ log = logging.getLogger("clipforge.drive")
 
 def _client_config() -> dict:
     """Return an OAuth2 web client config built from env vars."""
+    cid = (os.environ.get("GOOGLE_CLIENT_ID") or os.environ.get("CLIENT_ID") or "").strip()
+    sec = (os.environ.get("GOOGLE_CLIENT_SECRET") or os.environ.get("CLIENT_SECRET") or "").strip()
     return {
         "web": {
-            "client_id": os.environ.get("GOOGLE_CLIENT_ID", ""),
-            "client_secret": os.environ.get("GOOGLE_CLIENT_SECRET", ""),
+            "client_id": cid,
+            "client_secret": sec,
             "auth_uri": "https://accounts.google.com/o/oauth2/auth",
             "token_uri": "https://oauth2.googleapis.com/token",
         }

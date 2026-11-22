@@ -35,8 +35,8 @@ log = logging.getLogger("clipforge.youtube")
 
 
 def _get_client_id_secret() -> tuple[str, str]:
-    cid = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
-    sec = os.environ.get("GOOGLE_CLIENT_SECRET", "").strip()
+    cid = (os.environ.get("GOOGLE_CLIENT_ID") or os.environ.get("CLIENT_ID") or "").strip()
+    sec = (os.environ.get("GOOGLE_CLIENT_SECRET") or os.environ.get("CLIENT_SECRET") or "").strip()
     if cid and sec:
         return cid, sec
     # Check .env directly
