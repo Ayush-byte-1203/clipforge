@@ -931,9 +931,11 @@ def _meta_callback_uri(request: Request) -> str:
 
 
 @app.get("/api/meta/status")
-def meta_status():
+def meta_status(request: Request):
     import meta_publisher
-    return meta_publisher.get_status()
+    st = meta_publisher.get_status()
+    st["redirect_uri"] = _meta_callback_uri(request)
+    return st
 
 
 @app.get("/api/meta/auth")
@@ -943,7 +945,7 @@ def meta_auth(request: Request):
     url = meta_publisher.get_auth_url(cb)
     if not url:
         raise HTTPException(400, "Meta App ID / Secret not configured. Please set META_APP_ID and META_APP_SECRET in .env.")
-    return {"url": url}
+    return {"url": url, "redirect_uri": cb}
 
 
 @app.get("/api/meta/callback")

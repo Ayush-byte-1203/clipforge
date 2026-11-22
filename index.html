@@ -725,10 +725,18 @@ async function loadMeta() {
         <div style="display:flex;flex-direction:column;gap:6px">
           <button onclick="connectMeta()" style="background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);color:#fff;border:0;border-radius:6px;padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer;width:100%">Connect Meta (IG & FB)</button>
           <details style="border-top:none;padding-top:2px;font-size:12px">
-            <summary style="cursor:pointer;color:var(--accent);font-size:11.5px">Or Enter Token Directly</summary>
+            <summary style="cursor:pointer;color:var(--accent);font-size:11.5px">Or Enter Token Directly (Easiest)</summary>
             <div style="margin-top:6px;display:flex;flex-direction:column;gap:6px">
               <input type="password" id="metaTokenInput" placeholder="EAAB... (Graph API / Page Token)" style="padding:6px 8px;font-size:11.5px">
               <button onclick="connectMetaWithToken()" style="background:var(--accent);color:#fff;border:0;border-radius:4px;padding:5px 8px;font-size:11.5px;font-weight:600;cursor:pointer">Save & Connect</button>
+            </div>
+          </details>
+          <details style="margin-top:4px;font-size:11px;color:var(--mute)">
+            <summary style="cursor:pointer;color:var(--accent);font-size:11.5px">Meta App OAuth Setup</summary>
+            <div style="margin-top:4px;padding:6px;background:rgba(255,255,255,0.05);border-radius:4px;word-break:break-all">
+              <span>Valid OAuth Redirect URI:</span>
+              <code style="color:var(--accent);display:block;margin:3px 0;font-size:10.5px">${esc(d.redirect_uri || (window.location.origin + '/api/meta/callback'))}</code>
+              <button onclick="navigator.clipboard.writeText('${esc(d.redirect_uri || (window.location.origin + '/api/meta/callback'))}');alert('Copied redirect URI!')" style="background:var(--accent);color:#fff;border:0;border-radius:3px;padding:2px 6px;font-size:10px;cursor:pointer">Copy URI</button>
             </div>
           </details>
           <small style="color:var(--mute);font-size:11px">Auto-publishes viral vertical reels with hashtags & hooks</small>
