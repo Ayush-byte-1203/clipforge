@@ -686,9 +686,11 @@ def _callback_uri(request: Request) -> str:
 
 
 @app.get("/api/drive/status")
-def drive_status():
+def drive_status(request: Request):
     import drive
-    return drive.get_status()
+    st = drive.get_status()
+    st["redirect_uri"] = _callback_uri(request)
+    return st
 
 
 @app.get("/api/drive/auth")
@@ -698,7 +700,7 @@ def drive_auth(request: Request):
     url = drive.get_auth_url(cb)
     if not url:
         raise HTTPException(400, "Google Drive credentials not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.")
-    return {"url": url}
+    return {"url": url, "redirect_uri": cb}
 
 
 @app.get("/api/drive/callback")
@@ -730,9 +732,11 @@ def _yt_callback_uri(request: Request) -> str:
 
 
 @app.get("/api/youtube/status")
-def youtube_status():
+def youtube_status(request: Request):
     import youtube_publisher
-    return youtube_publisher.get_status()
+    st = youtube_publisher.get_status()
+    st["redirect_uri"] = _yt_callback_uri(request)
+    return st
 
 
 @app.get("/api/youtube/auth")
@@ -742,7 +746,7 @@ def youtube_auth(request: Request):
     url = youtube_publisher.get_auth_url(cb)
     if not url:
         raise HTTPException(400, "Google credentials not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.")
-    return {"url": url}
+    return {"url": url, "redirect_uri": cb}
 
 
 @app.get("/api/youtube/callback")
