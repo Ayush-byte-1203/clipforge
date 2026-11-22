@@ -24,15 +24,13 @@ from server import app
 # Normalise Vercel serverless routing paths so root and API endpoints resolve seamlessly
 @app.middleware("http")
 async def vercel_routing_middleware(request: Request, call_next):
-    matched = request.headers.get("x-matched-path")
-    if matched:
-        request.scope["path"] = matched
-    elif request.scope["path"] in ("/api/index.py", "/api/index", "/api"):
+    path = request.scope.get("path", "")
+    if path in ("/api/index.py", "/api/index"):
         request.scope["path"] = "/"
-    elif request.scope["path"].startswith("/api/index.py/"):
-        request.scope["path"] = request.scope["path"][len("/api/index.py"):]
-    elif request.scope["path"].startswith("/api/index/"):
-        request.scope["path"] = request.scope["path"][len("/api/index"):]
+    elif path.startswith("/api/index.py/"):
+        request.scope["path"] = path[len("/api/index.py"):]
+    elif path.startswith("/api/index/"):
+        request.scope["path"] = path[len("/api/index"):]
     return await call_next(request)
 
 @app.get("/api/index.py", response_class=HTMLResponse)
