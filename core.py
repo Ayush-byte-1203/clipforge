@@ -292,7 +292,8 @@ def load_wav_float32(wav: Path):
 
 
 def clean_transcript_word(w: str) -> str:
-    """Clean hallucinated Arabic/Persian symbols, bad punctuation merges, and artifacts."""
+    """Clean hallucinated Arabic/Persian symbols, bad punctuation merges, zero-width spaces, and artifacts."""
+    w = w.replace("\u200b", "").replace("\ufeff", "")
     w = re.sub(r"[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\u0000-\u001F]+", "", w)
     w = re.sub(r"(\w+)'re\b", r"\1 are", w)
     w = re.sub(r"[śźżłćń]+", "", w)
@@ -401,11 +402,26 @@ def clamp(x, lo=0.0, hi=1.0):
 
 
 def build_sentences(words: list[dict]) -> list[dict]:
+    clean_words = []
+    last_s = -0.05
+    for w in (words or []):
+        txt = w.get("w", "").replace("\u200b", "").strip()
+        if not txt:
+            continue
+        ws = float(w.get("s", 0))
+        we = float(w.get("e", ws + 0.2))
+        if ws < last_s - 0.05:
+            continue
+        if clean_words and abs(ws - clean_words[-1]["s"]) < 0.08 and txt.lower() == clean_words[-1]["w"].lower():
+            continue
+        clean_words.append({"w": txt, "s": ws, "e": max(ws + 0.1, we)})
+        last_s = max(last_s, ws)
+
     out, cur = [], []
-    for i, w in enumerate(words):
+    for i, w in enumerate(clean_words):
         cur.append(w)
-        nxt = words[i + 1] if i + 1 < len(words) else None
-        if re.search(r"[.!?…。！？]$", w["w"]) or nxt is None or nxt["s"] - w["e"] > 0.9 or len(cur) >= 30:
+        nxt = clean_words[i + 1] if i + 1 < len(clean_words) else None
+        if re.search(r"[.!?…。！？]$", w["w"]) or nxt is None or nxt["s"] - w["e"] > 0.9 or len(cur) >= 25:
             out.append({"s": cur[0]["s"], "e": cur[-1]["e"], "text": " ".join(x["w"] for x in cur), "n": len(cur)})
             cur = []
     return out
@@ -687,18 +703,40 @@ def make_ass(words: list[dict], dur: float, title: str, opts: dict) -> str:
     hi = {"gold": "&H00D7FF&", "green": "&H00F827&", "pink": "&HB469FF&", "cyan": "&HFFFF00&", "white": "&HFFFFFF&"}.get(
         opts.get("caption_color", "gold"), "&H00D7FF&")
     up = bool(opts.get("uppercase", True))
+
+    # Clean and deduplicate words to prevent duplicate speech or stutter artifacts
+    clean_words = []
+    last_s = -0.05
+    for w in (words or []):
+        txt = _clean(w.get("w", "").replace("\u200b", "").strip())
+        if not txt:
+            continue
+        ws = float(w.get("s", 0))
+        we = float(w.get("e", ws + 0.2))
+        if ws < last_s - 0.05:
+            continue
+        if clean_words and abs(ws - clean_words[-1]["s"]) < 0.08 and txt.lower() == clean_words[-1]["w"].lower():
+            continue
+        clean_words.append({"w": txt, "s": ws, "e": max(ws + 0.12, we)})
+        last_s = max(last_s, ws)
+    words = clean_words
+
+    # Lower-third safe-zone positioning (MarginV: 300 for fit/split, 260 for fill)
+    layout = opts.get("layout", "fill")
+    margin_v = 300 if layout in ("fit", "split") else 260
+
     head = ("[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\nWrapStyle: 2\nScaledBorderAndShadow: yes\n\n"
             "[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, "
             "Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, "
             "MarginR, MarginV, Encoding\n"
-            "Style: Cap,Poppins,64,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,7,2,2,60,60,220,1\n"
-            "Style: Hook,Poppins,58,&H00000000,&H000000FF,&H00FFFFFF,&H00FFFFFF,-1,0,0,0,100,100,0,0,3,16,0,8,80,80,190,1\n"
-            "Style: CTA,Poppins,56,&H00FFFFFF,&H000000FF,&H00000000,&HCC000000,-1,0,0,0,100,100,0,0,3,14,0,8,60,60,140,1\n\n"
+            f"Style: Cap,Poppins,56,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,5,1.5,2,70,70,{margin_v},1\n"
+            "Style: Hook,Poppins,54,&H00000000,&H000000FF,&H00FFFFFF,&H00FFFFFF,-1,0,0,0,100,100,0,0,3,14,0,8,80,80,180,1\n"
+            "Style: CTA,Poppins,52,&H00FFFFFF,&H000000FF,&H00000000,&HCC000000,-1,0,0,0,100,100,0,0,3,12,0,8,60,60,140,1\n\n"
             "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n")
     ev = []
     if opts.get("hook", True) and title:
         lines, cur = [], ""
-        for w in _clean(title).split():
+        for w in _clean(title.replace("\u200b", "").strip()).split():
             if len(cur) + len(w) + 1 > 22 and cur:
                 lines.append(cur)
                 cur = w
@@ -713,21 +751,28 @@ def make_ass(words: list[dict], dur: float, title: str, opts: dict) -> str:
             cur.append(w)
             nxt = words[k + 1] if k + 1 < len(words) else None
             chars = sum(len(x["w"]) + 1 for x in cur)
-            if (nxt is None or len(cur) >= 4 or chars >= 20 or re.search(r"[.!?,;:]$", w["w"]) or nxt["s"] - w["e"] > 0.6):
+            # Snappy 2-3 words per phrase (Shorts/TikTok style)
+            if (nxt is None or len(cur) >= 3 or chars >= 16 or re.search(r"[.!?,;:]$", w["w"]) or (nxt and nxt["s"] - w["e"] > 0.5)):
                 groups.append(cur)
                 cur = []
+        last_t1 = 0.0
         for gi, g in enumerate(groups):
-            gend = groups[gi + 1][0]["s"] if gi + 1 < len(groups) else g[-1]["e"] + 0.3
-            gend = min(gend, g[-1]["e"] + 0.4)
+            nxt_g_start = groups[gi + 1][0]["s"] if gi + 1 < len(groups) else dur
+            gend = min(nxt_g_start, g[-1]["e"] + 0.3)
             for k, w in enumerate(g):
-                t0 = w["s"]
-                t1 = g[k + 1]["s"] if k + 1 < len(g) else max(gend, w["e"])
-                if t1 <= t0:
-                    t1 = t0 + 0.08
+                raw_t0 = w["s"]
+                raw_t1 = g[k + 1]["s"] if k + 1 < len(g) else gend
+                # Guarantee strictly sequential dialogue timeline (no simultaneous dialogues)
+                t0 = max(raw_t0, last_t1)
+                t1 = max(t0 + 0.08, raw_t1)
+                if t1 > nxt_g_start and gi + 1 < len(groups):
+                    t1 = max(t0 + 0.08, nxt_g_start)
+                last_t1 = t1
+
                 parts = []
                 for m, x in enumerate(g):
                     tx = _clean(x["w"].upper() if up else x["w"])
-                    parts.append(f"{{\\1c{hi}\\fscx112\\fscy112}}{tx}{{\\r}}" if m == k else tx)
+                    parts.append(f"{{\\1c{hi}\\fscx110\\fscy110}}{tx}{{\\r}}" if m == k else tx)
                 ev.append(f"Dialogue: 0,{_t(t0)},{_t(t1)},Cap,,0,0,0,,{' '.join(parts)}")
     if opts.get("cta", True) and dur >= 5.0:
         cta_start = max(0.0, dur - 4.5)
@@ -921,6 +966,25 @@ def extract_cloud_transcript(info: dict, ydl=None) -> dict | None:
                         for w_i, word in enumerate(w_list):
                             w_s = t0 + w_i * dur_per_word
                             words.append({"w": word, "s": round(w_s, 2), "e": round(w_s + dur_per_word, 2)})
+
+        # De-duplicate progressive/rolling caption windows & remove zero-width artifacts
+        clean_words = []
+        last_seen_s = -0.05
+        for w in words:
+            txt = w["w"].replace("\u200b", "").strip()
+            if not txt:
+                continue
+            ws = float(w["s"])
+            we = float(w["e"])
+            # Skip backward jumps from rolling caption chunks
+            if ws < last_seen_s - 0.05:
+                continue
+            # Deduplicate same word if practically identical start time (< 0.08s)
+            if clean_words and abs(ws - clean_words[-1]["s"]) < 0.08 and txt.lower() == clean_words[-1]["w"].lower():
+                continue
+            clean_words.append({"w": txt, "s": round(ws, 2), "e": round(max(ws + 0.15, we), 2)})
+            last_seen_s = max(last_seen_s, ws)
+        words = clean_words
 
         if len(words) >= 5:
             return {"language": "en", "words": words}
