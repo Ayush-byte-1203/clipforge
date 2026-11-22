@@ -19,7 +19,8 @@ from typing import Any
 import requests
 
 ROOT = Path(__file__).parent
-DATA = Path(os.environ.get("CLIPFORGE_DATA", ROOT / "data")).resolve()
+_default_data = Path("/tmp/clipforge_data") if (os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")) else (ROOT / "data")
+DATA = Path(os.environ.get("CLIPFORGE_DATA", _default_data)).resolve()
 TOKEN_PATH = DATA / "meta_token.json"
 
 GRAPH_API_VERSION = "v21.0"

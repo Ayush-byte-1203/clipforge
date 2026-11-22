@@ -26,7 +26,8 @@ from fastapi.responses import FileResponse, HTMLResponse
 import core
 
 ROOT = Path(__file__).parent
-DATA = Path(os.environ.get("CLIPFORGE_DATA", ROOT / "data")).resolve()
+_default_data = Path("/tmp/clipforge_data") if (os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")) else (ROOT / "data")
+DATA = Path(os.environ.get("CLIPFORGE_DATA", _default_data)).resolve()
 (DATA / "jobs").mkdir(parents=True, exist_ok=True)
 
 # Write cookies.txt from env var if present (for cloud deployments like Render)
@@ -671,7 +672,7 @@ def delete_job(jid: str):
 def _callback_uri(request: Request) -> str:
     proto = request.headers.get("x-forwarded-proto") or request.url.scheme
     host = request.headers.get("x-forwarded-host") or request.url.netloc
-    if "onrender.com" in str(host) or proto == "https":
+    if "vercel.app" in str(host) or "onrender.com" in str(host) or proto == "https":
         return f"https://{host}/api/drive/callback"
     if "127.0.0.1" in str(host) or "localhost" in str(host):
         return "http://localhost:8787/api/drive/callback"
@@ -715,7 +716,7 @@ def drive_disconnect():
 def _yt_callback_uri(request: Request) -> str:
     proto = request.headers.get("x-forwarded-proto") or request.url.scheme
     host = request.headers.get("x-forwarded-host") or request.url.netloc
-    if "onrender.com" in str(host) or proto == "https":
+    if "vercel.app" in str(host) or "onrender.com" in str(host) or proto == "https":
         return f"https://{host}/api/youtube/callback"
     if "127.0.0.1" in str(host) or "localhost" in str(host):
         return "http://localhost:8787/api/youtube/callback"
@@ -912,7 +913,7 @@ def batch_schedule_job(jid: str, interval_hours: int = Form(2)):
 def _meta_callback_uri(request: Request) -> str:
     proto = request.headers.get("x-forwarded-proto") or request.url.scheme
     host = request.headers.get("x-forwarded-host") or request.url.netloc
-    if "onrender.com" in str(host) or proto == "https":
+    if "vercel.app" in str(host) or "onrender.com" in str(host) or proto == "https":
         return f"https://{host}/api/meta/callback"
     if "127.0.0.1" in str(host) or "localhost" in str(host):
         return "http://localhost:8787/api/meta/callback"

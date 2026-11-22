@@ -41,7 +41,8 @@ def ensure_ffmpeg_in_path():
 
 ensure_ffmpeg_in_path()
 
-DATA_DIR = Path(os.environ.get("CLIPFORGE_DATA", Path(__file__).parent / "data")).resolve()
+_default_data = Path("/tmp/clipforge_data") if (os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")) else (Path(__file__).parent / "data")
+DATA_DIR = Path(os.environ.get("CLIPFORGE_DATA", _default_data)).resolve()
 
 
 def _apply_cookie_opts(target_opts: dict, cookies_file: str = "", cookies_browser: str = ""):

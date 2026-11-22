@@ -13,7 +13,9 @@ from pathlib import Path
 from typing import Any
 
 # ── data directory (matches server.py convention) ────────────────────────────
-DATA = Path(os.environ.get("CLIPFORGE_DATA", Path(__file__).parent / "data")).resolve()
+ROOT = Path(__file__).parent
+_default_data = Path("/tmp/clipforge_data") if (os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")) else (ROOT / "data")
+DATA = Path(os.environ.get("CLIPFORGE_DATA", _default_data)).resolve()
 
 # Allow HTTP transport for local/reverse-proxy OAuth flow
 os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
