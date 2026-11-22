@@ -1,8 +1,8 @@
 FROM python:3.11-slim
 
-# System tools & libraries (ffmpeg with libass, curl, git, certificates)
+# System tools & libraries (ffmpeg with libass, curl, git, certificates, international fonts)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg fonts-liberation curl unzip git ca-certificates && \
+    ffmpeg fonts-liberation fonts-dejavu-core fonts-indic curl unzip git ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
 # Create user with UID 1000 (standard for Hugging Face Spaces & security)

@@ -390,9 +390,10 @@ def energy_per_second(wav: Path) -> list[float]:
 HOOK_WORDS = set("""never secret secrets stop why how nobody everyone biggest worst best mistake mistakes truth lie lies
 crazy insane shocking unbelievable actually literally wrong problem warning don't dont won't wont fail failed failure
 million billion free easy simple hack trick reason reasons important need must changed changes everything nothing
-first last only real fake hidden exposed proof""".split())
+first last only real fake hidden exposed proof kya kaise kyun kyu dekho sach jhooth sachai bhai suno arey""".split())
 EMOTION_WORDS = set("""love hate fear afraid angry amazing incredible terrible awful horrible beautiful hilarious funny
 wow oh god damn shit fuck crazy insane wild nuts huge massive brutal painful pain scared excited obsessed dead die
+fight liar cheat drama pagal shant chup gussa rona hasna masti maza mazaa zabardast
 killed win won lost cry cried laugh laughed shocked surprised unreal epic legend""".split())
 FILLER_START = ("um", "uh", "so yeah", "yeah so", "okay so", "and yeah")
 
@@ -729,9 +730,9 @@ def make_ass(words: list[dict], dur: float, title: str, opts: dict) -> str:
             "[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, "
             "Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, "
             "MarginR, MarginV, Encoding\n"
-            "Style: Cap,Poppins,56,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,5,1.5,5,60,60,0,1\n"
-            "Style: Hook,Poppins,52,&H00000000,&H000000FF,&H00FFFFFF,&H00FFFFFF,-1,0,0,0,100,100,0,0,3,14,0,5,80,80,0,1\n"
-            "Style: CTA,Poppins,52,&H00FFFFFF,&H000000FF,&H00000000,&HCC000000,-1,0,0,0,100,100,0,0,3,12,0,5,60,60,0,1\n\n"
+            "Style: Cap,Poppins,DejaVu Sans,Liberation Sans,Noto Sans Devanagari,sans-serif,56,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,5,1.5,5,60,60,0,1\n"
+            "Style: Hook,Poppins,DejaVu Sans,Liberation Sans,Noto Sans Devanagari,sans-serif,52,&H00000000,&H000000FF,&H00FFFFFF,&H00FFFFFF,-1,0,0,0,100,100,0,0,3,14,0,5,80,80,0,1\n"
+            "Style: CTA,Poppins,DejaVu Sans,Liberation Sans,Noto Sans Devanagari,sans-serif,52,&H00FFFFFF,&H000000FF,&H00000000,&HCC000000,-1,0,0,0,100,100,0,0,3,12,0,5,60,60,0,1\n\n"
             "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n")
     ev = []
     if opts.get("hook", True) and title:
@@ -894,11 +895,15 @@ def render_clip(src: Path, clip: dict, words: list[dict], vinfo: dict, quality: 
     return out
 
 
-def extract_cloud_transcript(info: dict, ydl=None) -> dict | None:
+def extract_cloud_transcript(info: dict, ydl=None, user_lang: str = "") -> dict | None:
     """Extract word-level or segment-level transcript from YouTube subtitles/auto-captions without downloading media."""
     subs = info.get("subtitles") or {}
     auto = info.get("automatic_captions") or {}
-    preferred_langs = ("en", "en-orig", "en-US", "en-GB", "hi", "es")
+    user_lang = (user_lang or "").strip().lower()
+    if user_lang in ("hi", "hi_en", "hinglish"):
+        preferred_langs = ("hi", "hi-Latn", "hi-orig", "en-IN", "en", "en-orig", "en-US")
+    else:
+        preferred_langs = ("en", "en-orig", "en-US", "en-GB", "en-IN", "hi", "hi-Latn", "hi-orig", "es", "fr", "de")
     candidates = []
 
     for s_dict in (subs, auto):
@@ -1073,7 +1078,7 @@ def run_pipeline(job_dir: Path, opts: dict, report, source: Path | None = None, 
                     info = y.extract_info(url, download=False)
                     title = info.get("title") or "video"
                     dur_total = float(info.get("duration") or 0)
-                    tr = extract_cloud_transcript(info, ydl=y)
+                    tr = extract_cloud_transcript(info, ydl=y, user_lang=opts.get("language", ""))
                     if tr and len(tr.get("words", [])) >= 15:
                         vinfo = {
                             "width": info.get("width") or 1920,
