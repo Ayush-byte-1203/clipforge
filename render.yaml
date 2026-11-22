@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: clipforge
+    env: docker
+    dockerfilePath: Dockerfile
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: CLIPFORGE_DATA
+        value: /data
+      - key: CLIPFORGE_HOST
+        value: 0.0.0.0
