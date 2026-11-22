@@ -729,9 +729,9 @@ def make_ass(words: list[dict], dur: float, title: str, opts: dict) -> str:
             "[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, "
             "Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, "
             "MarginR, MarginV, Encoding\n"
-            f"Style: Cap,Poppins,56,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,5,1.5,2,70,70,{margin_v},1\n"
-            "Style: Hook,Poppins,54,&H00000000,&H000000FF,&H00FFFFFF,&H00FFFFFF,-1,0,0,0,100,100,0,0,3,14,0,8,80,80,180,1\n"
-            "Style: CTA,Poppins,52,&H00FFFFFF,&H000000FF,&H00000000,&HCC000000,-1,0,0,0,100,100,0,0,3,12,0,8,60,60,140,1\n\n"
+            "Style: Cap,Poppins,56,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,5,1.5,5,60,60,0,1\n"
+            "Style: Hook,Poppins,52,&H00000000,&H000000FF,&H00FFFFFF,&H00FFFFFF,-1,0,0,0,100,100,0,0,3,14,0,5,80,80,0,1\n"
+            "Style: CTA,Poppins,52,&H00FFFFFF,&H000000FF,&H00000000,&HCC000000,-1,0,0,0,100,100,0,0,3,12,0,5,60,60,0,1\n\n"
             "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n")
     ev = []
     if opts.get("hook", True) and title:
@@ -744,7 +744,7 @@ def make_ass(words: list[dict], dur: float, title: str, opts: dict) -> str:
                 cur = f"{cur} {w}".strip()
         lines.append(cur)
         nl = "\\N"
-        ev.append(f"Dialogue: 1,{_t(0)},{_t(min(3.5, dur))},Hook,,0,0,0,,{nl.join(lines[:3])}")
+        ev.append(f"Dialogue: 1,{_t(0)},{_t(min(3.5, dur))},Hook,,0,0,0,,{{\\pos(540,360)}}{nl.join(lines[:3])}")
     if opts.get("captions", True) and words:
         groups, cur = [], []
         for k, w in enumerate(words):
@@ -773,10 +773,11 @@ def make_ass(words: list[dict], dur: float, title: str, opts: dict) -> str:
                 for m, x in enumerate(g):
                     tx = _clean(x["w"].upper() if up else x["w"])
                     parts.append(f"{{\\1c{hi}\\fscx110\\fscy110}}{tx}{{\\r}}" if m == k else tx)
-                ev.append(f"Dialogue: 0,{_t(t0)},{_t(t1)},Cap,,0,0,0,,{' '.join(parts)}")
+                # Fixed position locked dead-center in the lower blur area (X=540, Y=1500)
+                ev.append(f"Dialogue: 0,{_t(t0)},{_t(t1)},Cap,,0,0,0,,{{\\pos(540,1500)}}{' '.join(parts)}")
     if opts.get("cta", True) and dur >= 5.0:
         cta_start = max(0.0, dur - 4.5)
-        cta_text = "{\\fad(400,200)\\b1\\c&H00D7FF&}👍 LIKE {\\c&HFFFFFF&}• {\\c&H00FFFF&}🔄 SHARE {\\c&HFFFFFF&}• {\\c&H0000FF&}🔔 SUBSCRIBE!"
+        cta_text = "{\\pos(540,1720)\\fad(400,200)\\b1\\c&H00D7FF&}👍 LIKE {\\c&HFFFFFF&}• {\\c&H00FFFF&}🔄 SHARE {\\c&HFFFFFF&}• {\\c&H0000FF&}🔔 SUBSCRIBE!"
         ev.append(f"Dialogue: 2,{_t(cta_start)},{_t(dur)},CTA,,0,0,0,,{cta_text}")
     return head + "\n".join(ev) + "\n"
 
