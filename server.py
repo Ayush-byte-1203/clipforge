@@ -466,6 +466,8 @@ def render(jid: str, n: int, quality: str) -> Path:
 
 
 @app.get("/", response_class=HTMLResponse)
+@app.get("/api/index.py", response_class=HTMLResponse)
+@app.get("/api/index", response_class=HTMLResponse)
 def index():
     return (ROOT / "index.html").read_text(encoding="utf-8")
 
