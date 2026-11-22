@@ -144,28 +144,7 @@ video{width:100%;aspect-ratio:9/16;background:#000;border-radius:6px;display:blo
       </div>
     </div>
 
-    <div style="margin:12px 0;padding:12px;background:rgba(225,48,108,0.06);border:1px solid rgba(225,48,108,0.25);border-radius:8px">
-      <div style="display:flex;flex-direction:column;gap:6px">
-        <label class="check" style="font-weight:700;color:var(--text)">
-          <input type="checkbox" name="auto_publish_instagram" value="true"> 📸 Auto-Publish to Instagram Reels
-        </label>
-        <label class="check" style="font-weight:700;color:var(--text)">
-          <input type="checkbox" name="auto_publish_facebook" value="true"> 📘 Auto-Publish to Facebook Reels
-        </label>
-      </div>
-      <div style="margin-top:8px;font-size:12.5px;display:flex;flex-direction:column;gap:8px">
-        <label>Reels Schedule interval
-          <select name="meta_schedule">
-            <option value="instant" selected>Instant (All at once)</option>
-            <option value="interval_2h">1 Reel every 2 hours</option>
-            <option value="interval_4h">1 Reel every 4 hours</option>
-            <option value="interval_6h">1 Reel every 6 hours</option>
-            <option value="daily">1 Reel per day</option>
-          </select>
-        </label>
-        <small style="color:var(--mute);font-size:11.5px">⚡ Generates viral hooks, engagement prompts & high-converting hashtags (#reels, #gaming, #fyp) automatically.</small>
-      </div>
-    </div>
+
     <details>
       <summary>Advanced</summary>
       <div>
@@ -235,12 +214,7 @@ video{width:100%;aspect-ratio:9/16;background:#000;border-radius:6px;display:blo
     <div id="ytStatus" style="font-size:13px;color:var(--mute)">Checking channel...</div>
   </div>
 
-  <div id="metaPanel" style="margin-top:14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px">
-    <div style="font-weight:700;font-size:13.5px;margin-bottom:6px;display:flex;align-items:center;gap:6px">
-      <span>📸 Instagram & 📘 Facebook Reels</span>
-    </div>
-    <div id="metaStatus" style="font-size:13px;color:var(--mute)">Checking status...</div>
-  </div>
+
 
   <div id="drivePanel" style="margin-top:14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px">
     <div style="font-weight:700;font-size:13.5px;margin-bottom:6px;display:flex;align-items:center;gap:6px">
@@ -282,7 +256,7 @@ $("#f").addEventListener("submit", async e => {
   e.preventDefault();
   $("#ferr").textContent = ""; $("#go").disabled = true;
   const fd = new FormData(e.target);
-  for (const k of ["captions","hook","uppercase","delete_source","remove_local","auto_publish_youtube","auto_publish_instagram","auto_publish_facebook","cta","fast_stream"]) if (e.target.elements[k]) fd.set(k, e.target.elements[k].checked ? "true" : "false");
+  for (const k of ["captions","hook","uppercase","delete_source","remove_local","auto_publish_youtube","cta","fast_stream"]) if (e.target.elements[k]) fd.set(k, e.target.elements[k].checked ? "true" : "false");
   const qs = [...document.querySelectorAll(".qual:checked")].map(x => x.value);
   fd.set("qualities", qs.length ? qs.join(",") : "720p");
   if (!fd.get("file").name) fd.delete("file");
@@ -342,8 +316,6 @@ function draw(j){
     <span>🎯 Title: <b>${opts.hook !== false ? "On" : "Off"}</b></span>
     <span>☁️ Drive: <b>${j.drive_uploaded ? "Saved ✅" : (opts.save_to ? esc(opts.save_to) : "Auto-sync")}</b></span>
     <span>▶️ Shorts: <b>${opts.auto_publish_youtube ? (opts.youtube_schedule || "Instant") : "Manual"}</b></span>
-    <span>📸 IG: <b>${opts.auto_publish_instagram ? "Auto" : "Manual"}</b></span>
-    <span>📘 FB: <b>${opts.auto_publish_facebook ? "Auto" : "Manual"}</b></span>
   </div>`;
 
   if (j.status === "error" && j.can_retry) h += `<p><button class="go" style="padding:9px 16px" onclick="retryJob('${j.id}')">Retry from where it stopped</button></p>`;
@@ -355,7 +327,7 @@ function draw(j){
     </div>`;
   }
   h += `</div>`;
-  const key = j.status + "|" + (j.clips||[]).map(c => `${c.n}:${c.youtube_status||''}:${c.youtube_url||''}:${c.instagram_url||''}:${c.facebook_url||''}:${(c.youtube_metadata||{}).title||''}`).join("|");
+  const key = j.status + "|" + (j.clips||[]).map(c => `${c.n}:${c.youtube_status||''}:${c.youtube_url||''}:${(c.youtube_metadata||{}).title||''}`).join("|");
   if (j.status === "done") {
     if (key === drawnClips && v.dataset.job === j.id) return;
     drawnClips = key;
@@ -411,14 +383,6 @@ function clipHTML(j, c){
             `<button onclick="publishShort('${j.id}',${c.n},this)" style="background:#cc0000;color:#fff;border:0;border-radius:6px;padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer">▶️ Publish to Shorts</button>`
           )
         }
-        ${c.instagram_url ?
-          `<a href="${c.instagram_url}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;color:#fff;background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);padding:7px 12px;border-radius:6px;font-size:12.5px;font-weight:700;text-decoration:none">📸 IG Reel (Live ✅)</a>` :
-          `<button onclick="publishInstagram('${j.id}',${c.n},this)" style="background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);color:#fff;border:0;border-radius:6px;padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer">📸 Publish to IG Reel</button>`
-        }
-        ${c.facebook_url ?
-          `<a href="${c.facebook_url}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;color:#fff;background:#1877f2;padding:7px 12px;border-radius:6px;font-size:12.5px;font-weight:700;text-decoration:none">📘 ${c.facebook_status==='scheduled'?'FB Reel (Scheduled ⏰)':'FB Reel (Live ✅)'}</a>` :
-          `<button onclick="publishFacebook('${j.id}',${c.n},this)" style="background:#1877f2;color:#fff;border:0;border-radius:6px;padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer">📘 Publish to FB Reel</button>`
-        }
       </div>
       ${c.youtube_metadata ? `<div style="margin-top:10px;padding:10px 12px;background:rgba(255,0,0,0.06);border:1px solid rgba(255,0,0,0.18);border-radius:8px;font-size:12px">
         <div style="font-weight:700;color:#e53935;font-size:13px;margin-bottom:6px">📌 YouTube Title: ${esc(c.youtube_metadata.title)}</div>
@@ -428,13 +392,6 @@ function clipHTML(j, c){
         </details>
         <div style="color:var(--accent);font-size:11.5px;margin-bottom:4px">${(c.youtube_metadata.hashtags||[]).join(" ")}</div>
         <div style="font-size:11px;color:var(--mute)">🏷️ <b>${(c.youtube_metadata.tags||[]).length} Tags (${(c.youtube_metadata.tags||[]).reduce((a,b)=>a+b.length+1,0)} chars):</b> ${(c.youtube_metadata.tags||[]).slice(0, 15).join(", ")}...</div>
-      </div>` : ""}
-      ${c.instagram_metadata || c.facebook_metadata ? `<div style="margin-top:10px;padding:10px 12px;background:rgba(225,48,108,0.06);border:1px solid rgba(225,48,108,0.2);border-radius:8px;font-size:12px">
-        <div style="font-weight:700;color:#e1306c;font-size:13px;margin-bottom:6px">📸 📘 Reels Caption & Viral Tags</div>
-        <details>
-          <summary style="cursor:pointer;color:var(--text);font-weight:600">📝 View Reels Caption</summary>
-          <pre style="white-space:pre-wrap;font-family:inherit;font-size:11.5px;color:var(--mute);margin-top:6px;padding:8px;background:rgba(0,0,0,0.25);border-radius:6px">${esc((c.instagram_metadata || c.facebook_metadata).caption)}</pre>
-        </details>
       </div>` : ""}
     </div></article>`;
 }
@@ -695,130 +652,6 @@ async function deleteShort(jid, n, btn) {
   }
 }
 
-// Meta (Instagram & Facebook) Publisher
-async function loadMeta() {
-  try {
-    const r = await fetch("/api/meta/status");
-    const d = await r.json();
-    const el = $("#metaStatus");
-    if (!el) return;
-    if (d.connected) {
-      const ig = d.instagram || {};
-      const fb = d.facebook || {};
-      let html = `<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">`;
-      if (ig.id) {
-        html += `<div style="display:flex;align-items:center;gap:6px;font-size:12.5px">
-          ${ig.profile_pic ? `<img src="${ig.profile_pic}" style="width:22px;height:22px;border-radius:50%">` : '<span>📸</span>'}
-          <span style="color:var(--ok);font-weight:600">IG:</span> <b>@${esc(ig.username)}</b>
-        </div>`;
-      }
-      if (fb.id) {
-        html += `<div style="display:flex;align-items:center;gap:6px;font-size:12.5px">
-          <span>📘</span> <span style="color:var(--ok);font-weight:600">FB Page:</span> <b>${esc(fb.name)}</b>
-        </div>`;
-      }
-      html += `</div>
-        <button onclick="disconnectMeta()" style="background:none;border:1px solid var(--bad);color:var(--bad);border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer">Disconnect Meta</button>`;
-      el.innerHTML = html;
-    } else {
-      el.innerHTML = `
-        <div style="display:flex;flex-direction:column;gap:6px">
-          <button onclick="connectMeta()" style="background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);color:#fff;border:0;border-radius:6px;padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer;width:100%">Connect Meta (IG & FB)</button>
-          <details style="border-top:none;padding-top:2px;font-size:12px">
-            <summary style="cursor:pointer;color:var(--accent);font-size:11.5px">Or Enter Token Directly (Easiest)</summary>
-            <div style="margin-top:6px;display:flex;flex-direction:column;gap:6px">
-              <input type="password" id="metaTokenInput" placeholder="EAAB... (Graph API / Page Token)" style="padding:6px 8px;font-size:11.5px">
-              <button onclick="connectMetaWithToken()" style="background:var(--accent);color:#fff;border:0;border-radius:4px;padding:5px 8px;font-size:11.5px;font-weight:600;cursor:pointer">Save & Connect</button>
-            </div>
-          </details>
-          <details style="margin-top:4px;font-size:11px;color:var(--mute)">
-            <summary style="cursor:pointer;color:var(--accent);font-size:11.5px">Meta App OAuth Setup</summary>
-            <div style="margin-top:4px;padding:6px;background:rgba(255,255,255,0.05);border-radius:4px;word-break:break-all">
-              <span>Valid OAuth Redirect URI:</span>
-              <code style="color:var(--accent);display:block;margin:3px 0;font-size:10.5px">${esc(d.redirect_uri || (window.location.origin + '/api/meta/callback'))}</code>
-              <button onclick="navigator.clipboard.writeText('${esc(d.redirect_uri || (window.location.origin + '/api/meta/callback'))}');alert('Copied redirect URI!')" style="background:var(--accent);color:#fff;border:0;border-radius:3px;padding:2px 6px;font-size:10px;cursor:pointer">Copy URI</button>
-            </div>
-          </details>
-          <small style="color:var(--mute);font-size:11px">Auto-publishes viral vertical reels with hashtags & hooks</small>
-        </div>
-      `;
-    }
-  } catch(e) {
-    if (el) el.innerHTML = '<span style="color:var(--mute);font-size:12.5px">Enter token or credentials to connect</span>';
-  }
-}
-
-async function connectMeta() {
-  const r = await fetch("/api/meta/auth");
-  const d = await r.json();
-  if (d.url) {
-    window.open(d.url, "_blank");
-    const check = setInterval(async () => {
-      const res = await fetch("/api/meta/status");
-      const st = await res.json();
-      if (st.connected) { clearInterval(check); loadMeta(); }
-    }, 2000);
-    setTimeout(() => clearInterval(check), 60000);
-  } else {
-    alert(d.detail || "Meta App credentials required. Set META_APP_ID / META_APP_SECRET in .env or enter an Access Token directly.");
-  }
-}
-
-async function connectMetaWithToken() {
-  const inp = $("#metaTokenInput");
-  const tok = inp ? inp.value.trim() : "";
-  if (!tok) { alert("Please paste a Meta access token."); return; }
-  try {
-    const fd = new FormData();
-    fd.set("token", tok);
-    const res = await safeFetchJSON("/api/meta/connect-token", {method: "POST", body: fd});
-    alert("Connected successfully to Meta!");
-    loadMeta();
-  } catch (err) {
-    alert(err.message);
-  }
-}
-
-async function disconnectMeta() {
-  if (!confirm("Disconnect Meta (Instagram & Facebook)?")) return;
-  await fetch("/api/meta/disconnect", {method: "POST"});
-  loadMeta();
-}
-
-async function publishInstagram(jid, n, btn) {
-  const old = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = "Publishing to IG...";
-  try {
-    const fd = new FormData();
-    const res = await safeFetchJSON(`/api/jobs/${jid}/clips/${n}/publish-instagram`, {method: "POST", body: fd});
-    btn.textContent = "Published ✅";
-    drawnClips = "";
-    poll();
-  } catch (err) {
-    alert(err.message);
-    btn.textContent = old;
-    btn.disabled = false;
-  }
-}
-
-async function publishFacebook(jid, n, btn) {
-  const old = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = "Publishing to FB...";
-  try {
-    const fd = new FormData();
-    const res = await safeFetchJSON(`/api/jobs/${jid}/clips/${n}/publish-facebook`, {method: "POST", body: fd});
-    btn.textContent = "Published ✅";
-    drawnClips = "";
-    poll();
-  } catch (err) {
-    alert(err.message);
-    btn.textContent = old;
-    btn.disabled = false;
-  }
-}
-
 async function loadQueue() {
   try {
     const r = await fetch("/api/queue");
@@ -852,7 +685,6 @@ async function removeFromQueue(jid) {
 }
 
 loadYouTube();
-loadMeta();
 loadDrive();
 loadStorage();
 loadQueue();

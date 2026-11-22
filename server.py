@@ -257,102 +257,7 @@ def worker(jid: str, url: str, source: Path | None, opts: dict):
                 print(f"[clipforge youtube auto-publish error] {e}")
                 job.setdefault("notes", []).append(f"YouTube auto-publish note: {str(e)[:150]}")
 
-        # Auto-publish to Instagram Reels if enabled & connected
-        if opts.get("auto_publish_instagram"):
-            try:
-                import meta_publisher
-                if meta_publisher.is_connected() and meta_publisher.load_token_data().get("instagram_account_id"):
-                    report("Auto-publishing clips to Instagram Reels...", 0.98, "render")
-                    for idx, c in enumerate(job.get("clips", [])):
-                        best_qual = next((q for q in ("1080p", "720p", "480p") if (jdir(jid) / "clips" / f"clip{c['n']:02d}_{q}.mp4").exists()), None)
-                        if not best_qual:
-                            continue
-                        clip_file = jdir(jid) / "clips" / f"clip{c['n']:02d}_{best_qual}.mp4"
-                        meta = meta_publisher.generate_reels_metadata(
-                            clip_title=c.get("title", f"Clip {c['n']}"),
-                            clip_text=c.get("text", ""),
-                            source_title=job.get("title", ""),
-                            clip_index=idx + 1,
-                        )
-                        c["instagram_metadata"] = meta
-                        try:
-                            ig_res = meta_publisher.upload_instagram_reel(
-                                video_path=clip_file,
-                                caption=meta["caption"],
-                                share_to_feed=True,
-                            )
-                            c["instagram_url"] = ig_res["url"]
-                            c["instagram_id"] = ig_res["id"]
-                            c["instagram_status"] = "published"
-                            job.setdefault("notes", []).append(f"Published Instagram Reel {c['n']}: {ig_res['url']}")
-                            save(job)
-                        except Exception as e:
-                            err_str = str(e)
-                            print(f"[clipforge instagram auto-publish clip {c['n']} error] {err_str}")
-                            job.setdefault("notes", []).append(f"Clip {c['n']} Instagram note: {err_str[:120]}")
-            except Exception as e:
-                print(f"[clipforge instagram auto-publish error] {e}")
-                job.setdefault("notes", []).append(f"Instagram auto-publish note: {str(e)[:150]}")
 
-        # Auto-publish to Facebook Reels if enabled & connected
-        if opts.get("auto_publish_facebook"):
-            try:
-                import meta_publisher
-                if meta_publisher.is_connected() and meta_publisher.load_token_data().get("page_id"):
-                    report("Auto-publishing clips to Facebook Reels...", 0.99, "render")
-                    sched_mode = opts.get("meta_schedule", "instant")
-                    now = datetime.datetime.now(datetime.timezone.utc)
-                    fb_interval_hours = {
-                        "interval_2h": 2,
-                        "interval_4h": 4,
-                        "interval_6h": 6,
-                        "interval_8h": 8,
-                        "interval_12h": 12,
-                        "daily": 24,
-                    }.get(sched_mode, 0)
-
-                    if fb_interval_hours > 0:
-                        latest_sched = meta_publisher.get_latest_scheduled_time(JOBS)
-                        base_time = latest_sched if latest_sched > now else now
-                    else:
-                        base_time = now
-
-                    for idx, c in enumerate(job.get("clips", [])):
-                        best_qual = next((q for q in ("1080p", "720p", "480p") if (jdir(jid) / "clips" / f"clip{c['n']:02d}_{q}.mp4").exists()), None)
-                        if not best_qual:
-                            continue
-                        clip_file = jdir(jid) / "clips" / f"clip{c['n']:02d}_{best_qual}.mp4"
-                        meta = meta_publisher.generate_reels_metadata(
-                            clip_title=c.get("title", f"Clip {c['n']}"),
-                            clip_text=c.get("text", ""),
-                            source_title=job.get("title", ""),
-                            clip_index=idx + 1,
-                        )
-                        c["facebook_metadata"] = meta
-                        pub_time = None
-                        if fb_interval_hours > 0:
-                            pub_time = base_time + datetime.timedelta(hours=(idx + 1) * fb_interval_hours)
-
-                        try:
-                            fb_res = meta_publisher.upload_facebook_reel(
-                                video_path=clip_file,
-                                title=meta["title"],
-                                description=meta["caption"],
-                                scheduled_publish_time=pub_time,
-                            )
-                            c["facebook_url"] = fb_res["url"]
-                            c["facebook_id"] = fb_res["id"]
-                            c["facebook_scheduled"] = fb_res.get("scheduled")
-                            c["facebook_status"] = "published" if not pub_time else "scheduled"
-                            job.setdefault("notes", []).append(f"Published Facebook Reel {c['n']}: {fb_res['url']}")
-                            save(job)
-                        except Exception as e:
-                            err_str = str(e)
-                            print(f"[clipforge facebook auto-publish clip {c['n']} error] {err_str}")
-                            job.setdefault("notes", []).append(f"Clip {c['n']} Facebook note: {err_str[:120]}")
-            except Exception as e:
-                print(f"[clipforge facebook auto-publish error] {e}")
-                job.setdefault("notes", []).append(f"Facebook auto-publish note: {str(e)[:150]}")
 
         if opts.get("delete_source", True):
             for f in list(jdir(jid).glob("source.*")) + [jdir(jid) / "audio.wav"]:
@@ -486,7 +391,6 @@ def create_job(
     source_height: int = Form(1080), delete_source: bool = Form(True), save_to: str = Form(""),
     remove_local: bool = Form(False), cookies_browser: str = Form(""), cookies_file: str = Form(""),
     auto_publish_youtube: bool = Form(False), youtube_privacy: str = Form("public"), youtube_schedule: str = Form("instant"),
-    auto_publish_instagram: bool = Form(False), auto_publish_facebook: bool = Form(False), meta_schedule: str = Form("instant"),
     cta: bool = Form(True), fast_stream: bool = Form(True),
 ):
     url = url.strip()
@@ -526,7 +430,6 @@ def create_job(
                 hf_token=hf_token.strip(), llm_model=llm_model.strip(),
                 cookies_browser=cookies_browser, cookies_file=str(Path(cookies_file).expanduser()) if cookies_file else "",
                 auto_publish_youtube=auto_publish_youtube, youtube_privacy=youtube_privacy, youtube_schedule=youtube_schedule,
-                auto_publish_instagram=auto_publish_instagram, auto_publish_facebook=auto_publish_facebook, meta_schedule=meta_schedule,
                 cta=cta, fast_stream=(fast_stream in (True, "true", "True", "1", 1)))
 
     created_ids = []
@@ -919,137 +822,7 @@ def batch_schedule_job(jid: str, interval_hours: int = Form(2)):
     return {"ok": True, "scheduled_count": scheduled_count}
 
 
-# ----------------------------------------------------------------------------- Meta (Instagram & Facebook Reels)
-def _meta_callback_uri(request: Request) -> str:
-    proto = request.headers.get("x-forwarded-proto") or request.url.scheme
-    host = request.headers.get("x-forwarded-host") or request.url.netloc
-    if "vercel.app" in str(host) or "onrender.com" in str(host) or proto == "https":
-        return f"https://{host}/api/meta/callback"
-    if "127.0.0.1" in str(host) or "localhost" in str(host):
-        return "http://localhost:8787/api/meta/callback"
-    return f"{str(request.base_url).rstrip('/')}/api/meta/callback"
 
-
-@app.get("/api/meta/status")
-def meta_status(request: Request):
-    import meta_publisher
-    st = meta_publisher.get_status()
-    st["redirect_uri"] = _meta_callback_uri(request)
-    return st
-
-
-@app.get("/api/meta/auth")
-def meta_auth(request: Request):
-    import meta_publisher
-    cb = _meta_callback_uri(request)
-    url = meta_publisher.get_auth_url(cb)
-    if not url:
-        raise HTTPException(400, "Meta App ID / Secret not configured. Please set META_APP_ID and META_APP_SECRET in .env.")
-    return {"url": url, "redirect_uri": cb}
-
-
-@app.get("/api/meta/callback")
-def meta_callback(code: str, request: Request):
-    import meta_publisher
-    cb = _meta_callback_uri(request)
-    ok, err_msg = meta_publisher.handle_callback(code, cb)
-    if not ok:
-        return HTMLResponse(f"<body style='font-family:sans-serif;padding:40px;text-align:center;'><h2>❌ Could not connect Meta</h2><p style='color:#c00;'>{err_msg}</p><p>Please check your credentials or try again.</p></body>")
-    return HTMLResponse("<body style='font-family:sans-serif;padding:40px;text-align:center;'><h2>✅ Instagram & Facebook Connected!</h2><p>ClipForge is now authorized to publish Reels.</p><p>You can close this tab now.</p><script>setTimeout(() => window.close(), 2500);</script></body>")
-
-
-@app.post("/api/meta/connect-token")
-def meta_connect_token(token: str = Form(...)):
-    import meta_publisher
-    clean_tok = token.strip()
-    if not clean_tok:
-        raise HTTPException(400, "Access token is required.")
-    ok, msg = meta_publisher.setup_accounts_from_token(clean_tok)
-    if not ok:
-        raise HTTPException(400, f"Connection failed: {msg}")
-    return {"ok": True, "message": msg, "status": meta_publisher.get_status()}
-
-
-@app.post("/api/meta/disconnect")
-def meta_disconnect():
-    import meta_publisher
-    meta_publisher.disconnect()
-    return {"ok": True}
-
-
-@app.post("/api/jobs/{jid}/clips/{n}/publish-instagram")
-def manual_publish_clip_instagram(jid: str, n: int, caption: str = Form("")):
-    import meta_publisher
-    if not meta_publisher.is_connected() or not meta_publisher.load_token_data().get("instagram_account_id"):
-        raise HTTPException(400, "Instagram Business Account is not connected. Connect Meta in ClipForge settings first.")
-    job = JOBS.get(jid)
-    if not job or not (1 <= n <= len(job.get("clips", []))):
-        raise HTTPException(404, "Clip not found")
-    c = job["clips"][n - 1]
-    best_qual = next((q for q in ("1080p", "720p", "480p") if (jdir(jid) / "clips" / f"clip{n:02d}_{q}.mp4").exists()), None)
-    if not best_qual:
-        best_qual = "720p"
-        render(jid, n, best_qual)
-    clip_file = jdir(jid) / "clips" / f"clip{n:02d}_{best_qual}.mp4"
-    meta = meta_publisher.generate_reels_metadata(
-        clip_title=c.get("title", f"Clip {n}"),
-        clip_text=c.get("text", ""),
-        source_title=job.get("title", ""),
-        clip_index=n,
-    )
-    final_caption = caption or meta["caption"]
-    try:
-        res = meta_publisher.upload_instagram_reel(
-            video_path=clip_file,
-            caption=final_caption,
-            share_to_feed=True,
-        )
-    except Exception as e:
-        raise HTTPException(500, f"Instagram upload failed: {str(e)[:250]}")
-    c["instagram_url"] = res["url"]
-    c["instagram_id"] = res["id"]
-    c["instagram_status"] = "published"
-    c["instagram_metadata"] = meta
-    save(job)
-    return res
-
-
-@app.post("/api/jobs/{jid}/clips/{n}/publish-facebook")
-def manual_publish_clip_facebook(jid: str, n: int, title: str = Form(""), description: str = Form("")):
-    import meta_publisher
-    if not meta_publisher.is_connected() or not meta_publisher.load_token_data().get("page_id"):
-        raise HTTPException(400, "Facebook Page is not connected. Connect Meta in ClipForge settings first.")
-    job = JOBS.get(jid)
-    if not job or not (1 <= n <= len(job.get("clips", []))):
-        raise HTTPException(404, "Clip not found")
-    c = job["clips"][n - 1]
-    best_qual = next((q for q in ("1080p", "720p", "480p") if (jdir(jid) / "clips" / f"clip{n:02d}_{q}.mp4").exists()), None)
-    if not best_qual:
-        best_qual = "720p"
-        render(jid, n, best_qual)
-    clip_file = jdir(jid) / "clips" / f"clip{n:02d}_{best_qual}.mp4"
-    meta = meta_publisher.generate_reels_metadata(
-        clip_title=c.get("title", f"Clip {n}"),
-        clip_text=c.get("text", ""),
-        source_title=job.get("title", ""),
-        clip_index=n,
-    )
-    final_title = title or meta["title"]
-    final_desc = description or meta["caption"]
-    try:
-        res = meta_publisher.upload_facebook_reel(
-            video_path=clip_file,
-            title=final_title,
-            description=final_desc,
-        )
-    except Exception as e:
-        raise HTTPException(500, f"Facebook Reel upload failed: {str(e)[:250]}")
-    c["facebook_url"] = res["url"]
-    c["facebook_id"] = res["id"]
-    c["facebook_status"] = "published"
-    c["facebook_metadata"] = meta
-    save(job)
-    return res
 
 
 @app.get("/api/queue")
