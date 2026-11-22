@@ -16,7 +16,7 @@ RUN curl -fsSL https://deno.land/install.sh | sh -s -- -y
 ENV PATH="/home/appuser/.deno/bin:${PATH}"
 
 # Install Python dependencies
-COPY requirements.txt .
+COPY requirements-full.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code

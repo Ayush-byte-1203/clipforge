@@ -265,7 +265,7 @@ def health() -> dict:
     det["yt-dlp-ejs"] = bool(importlib.util.find_spec("yt_dlp_ejs"))
     for mod in ("faster_whisper", "cv2", "numpy"):
         if not importlib.util.find_spec(mod):
-            warns.append(f"Python package '{mod}' is missing. Run: pip install -r requirements.txt")
+            warns.append(f"Python package '{mod}' is missing. Run: pip install -r requirements-full.txt")
     try:
         from importlib.metadata import version
 
